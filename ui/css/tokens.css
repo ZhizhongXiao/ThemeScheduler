@@ -1,0 +1,37 @@
+@font-face {
+  font-family: "ThemeScheduler Source Han Sans";
+  src: url("../fonts/ThemeSchedulerSourceHanSans.otf?v=20260910") format("opentype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+
+:root {
+  --ts-font-ui:
+    "ThemeScheduler Source Han Sans", "Source Han Sans SC",
+    "Source Han Sans CN", "思源黑体 CN", "思源黑体",
+    "Noto Sans CJK SC", "Microsoft YaHei UI", "Segoe UI", sans-serif;
+
+  --ts-purple: #bd93f9;
+  --ts-purple-bright: #d6acff;
+  --ts-purple-strong: #9d6eea;
+  --ts-yellow: #f1fa8c;
+  --ts-green: #50fa7b;
+  --ts-red: #ff5555;
+
+  --ts-brand: var(--ts-purple);
+  --ts-brand-bright: var(--ts-purple-bright);
+  --ts-brand-strong: var(--ts-purple-strong);
+  --ts-success: var(--ts-green);
+  --ts-warning: var(--ts-yellow);
+  --ts-danger: var(--ts-red);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

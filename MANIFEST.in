@@ -1,0 +1,13 @@
+include README.md
+include pyproject.toml
+include uv.lock
+graft src
+graft entrypoints
+graft ui
+graft packaging
+graft assets
+graft docs
+graft tests
+graft tools
+global-exclude __pycache__
+global-exclude *.py[cod]

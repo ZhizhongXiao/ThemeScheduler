@@ -1,0 +1,806 @@
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+import tempfile
+import unittest
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from unittest.mock import patch
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SOURCE_ROOT = PROJECT_ROOT / "src"
+
+from theme_scheduler.accent_profile import (
+    AccentProfile,
+    AccentProfileStore,
+)
+from theme_scheduler.accent_theme import ThemeVisualState
+from theme_scheduler.config import AppConfig, ConfigStore
+from theme_scheduler.gui import (
+    frontend_entry,
+    launch_gui,
+    validate_live_executable,
+)
+from theme_scheduler.initial_setup import (
+    create_initial_setup_marker,
+)
+from theme_scheduler.scheduler import (
+    TaskDefinitionBackup,
+    TaskSpec,
+    build_task_spec,
+)
+from theme_scheduler.state import AppState, StateStore
+from theme_scheduler.storage import UserDataLayout
+from theme_scheduler.webview_runtime import (
+    WEBVIEW2_CLIENT_ID,
+    detect_webview2_runtime,
+)
+from theme_scheduler.workbench import (
+    GuiApi,
+    ShellActions,
+    create_live_gui_api,
+)
+
+USER_ID = r"DESKTOP-TEST\Example"
+
+
+class FixedClock:
+    def now(self) -> datetime:
+        return datetime(2026, 7, 24, 12, 0, tzinfo=UTC)
+
+
+class FakeLock:
+    def acquire(self) -> bool:
+        return True
+
+    def release(self) -> None:
+        return None
+
+
+class MemoryScheduler:
+    def __init__(self, task: TaskSpec | None = None) -> None:
+        self.task = task
+        self.register_count = 0
+
+    def current_user_id(self) -> str:
+        return USER_ID
+
+    def read(self, task_path: str) -> TaskSpec | None:
+        if self.task is None or self.task.task_path != task_path:
+            return None
+        return self.task
+
+    def register(self, task: TaskSpec) -> None:
+        self.register_count += 1
+        self.task = task
+
+    def capture(self, task_path: str) -> TaskDefinitionBackup | None:
+        task = self.read(task_path)
+        if task is None:
+            return None
+        return TaskDefinitionBackup(
+            task_path,
+            json.dumps(task.as_dict()),
+            task.enabled,
+        )
+
+    def restore(self, backup: TaskDefinitionBackup) -> None:
+        self.task = TaskSpec.from_dict(json.loads(backup.definition_xml))
+
+    def delete(self, task_path: str) -> None:
+        self.task = None
+
+
+class FailingReadScheduler(MemoryScheduler):
+    def current_user_id(self) -> str:
+        raise OSError("scheduler unavailable")
+
+
+class FakeShell:
+    def __init__(self) -> None:
+        self.opened: list[str] = []
+
+    def open(self, target: str) -> None:
+        self.opened.append(target)
+
+
+@dataclass
+class FakeMaintenanceOutcome:
+    def as_dict(self):
+        return {
+            "action": "restore-install-appearance",
+            "result": "restored",
+            "pausedAfter": True,
+            "windowsVerified": True,
+            "systemModePreserved": True,
+            "dataChanged": True,
+            "windowsChanged": True,
+            "taskSchedulerChanged": False,
+            "message": "restored",
+        }
+
+
+class FakeMaintenanceService:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def restore_install_appearance(self):
+        self.calls += 1
+        return FakeMaintenanceOutcome()
+
+
+class FakeHealthReport:
+    def as_dict(self):
+        return {
+            "kind": "themescheduler.health-report",
+            "schemaVersion": 1,
+            "capturedAt": "2026-07-25T12:00:00+08:00",
+            "status": "repairable",
+            "summary": {
+                "healthy": 1,
+                "warning": 0,
+                "repairable": 1,
+                "action-required": 0,
+            },
+            "checks": [
+                {
+                    "id": "task.definition",
+                    "category": "task",
+                    "status": "repairable",
+                    "message": "Task drifted.",
+                    "repairAction": "task.repair",
+                }
+            ],
+        }
+
+
+class FakeHealthService:
+    def inspect(self):
+        return FakeHealthReport()
+
+
+class FakeIdentityRepairOutcome:
+    def as_dict(self):
+        return {
+            "action": "notification-identity-repair",
+            "result": "changed",
+            "message": "Notification identity is consistent.",
+            "dataChanged": True,
+            "windowsChanged": True,
+            "taskSchedulerChanged": False,
+        }
+
+
+class FakeIdentityRepairService:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def repair(self):
+        self.calls += 1
+        return FakeIdentityRepairOutcome()
+
+
+def payload(**changes):
+    value = {
+        "dayStart": "06:15",
+        "nightStart": "23:45",
+        "dayAppsTheme": "light",
+        "nightAppsTheme": "dark",
+        "notifyErrors": True,
+        "notifyStatusChanges": True,
+    }
+    value.update(changes)
+    return value
+
+
+def workspace_payload(**changes):
+    value = {
+        **payload(),
+        "dayColor": {
+            "hex": "#744DA9",
+            "red": 116,
+            "green": 77,
+            "blue": 169,
+        },
+        "nightColor": {
+            "hex": "#FFB900",
+            "red": 255,
+            "green": 185,
+            "blue": 0,
+        },
+    }
+    value.update(changes)
+    return value
+
+
+class GuiApiTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.layout = UserDataLayout(Path(self.temporary.name))
+        self.layout.ensure_directories()
+        ConfigStore(self.layout.config).initialize(AppConfig.defaults())
+        StateStore(self.layout.state).initialize(AppState.initial())
+        self.executable = Path(self.temporary.name) / "ThemeScheduler.exe"
+        self.executable.touch()
+        desired = build_task_spec(
+            AppConfig.defaults(),
+            executable=str(self.executable.resolve()),
+            user_id=USER_ID,
+        )
+        self.scheduler = MemoryScheduler(desired)
+        self.shell = FakeShell()
+        self.maintenance = FakeMaintenanceService()
+        self.identity_repair = FakeIdentityRepairService()
+        self.api = GuiApi(
+            self.layout,
+            executable=self.executable,
+            scheduler_backend=self.scheduler,
+            lock_factory=FakeLock,
+            maintenance_service_factory=lambda: self.maintenance,
+            health_service_factory=FakeHealthService,
+            identity_repair_service_factory=(lambda: self.identity_repair),
+            current_appearance_reader=lambda: ThemeVisualState(
+                "0",
+                0xD0744DA9,
+                "Light",
+                "Dark",
+            ),
+            shell_actions=self.shell,  # type: ignore[arg-type]
+            clock=FixedClock(),  # type: ignore[arg-type]
+            allow_live_writes=True,
+        )
+
+    def create_profiles(self) -> None:
+        for name, color in (
+            ("day", 0xD0744DA9),
+            ("night", 0xC4FFB900),
+        ):
+            AccentProfileStore(
+                self.layout.profile_path(name),
+                name,
+            ).create(
+                AccentProfile(
+                    name,
+                    "2026-07-23T10:00:00+08:00",
+                    False,
+                    color,
+                    "26200",
+                )
+            )
+
+    def test_overview_combines_config_state_profiles_and_task(self) -> None:
+        result = self.api.get_overview()
+
+        self.assertEqual(result["result"], "success")
+        self.assertEqual(result["targetProfile"], "day")
+        self.assertTrue(result["task"]["available"])
+        self.assertTrue(result["task"]["valid"])
+        self.assertTrue(result["currentAppearanceReadEnabled"])
+        self.assertIsNotNone(result["task"]["desired"])
+        self.assertFalse(result["profiles"]["day"]["valid"])
+        self.assertFalse(result["profiles"]["night"]["valid"])
+        self.assertTrue(result["recentLog"]["available"])
+        self.assertEqual(result["recentLog"]["events"], [])
+        self.assertFalse(result["initialSetupPending"])
+        self.assertEqual(
+            result["installBackup"]["status"],
+            "absent",
+        )
+        self.assertFalse(result["windowsChanged"])
+
+    def test_current_windows_appearance_read_is_draft_only(self) -> None:
+        before_config = ConfigStore(self.layout.config).load()
+
+        result = self.api.read_current_windows_appearance()
+
+        self.assertEqual(result["result"], "success")
+        self.assertEqual(result["appMode"], "light")
+        self.assertEqual(result["systemMode"], "dark")
+        self.assertEqual(result["color"]["hex"], "#744DA9")
+        self.assertEqual(result["colorizationColor"], "0XD0744DA9")
+        self.assertFalse(result["dataChanged"])
+        self.assertFalse(result["windowsChanged"])
+        self.assertFalse(result["taskSchedulerChanged"])
+        self.assertEqual(ConfigStore(self.layout.config).load(), before_config)
+        self.assertEqual(self.scheduler.register_count, 0)
+
+    def test_overview_exposes_valid_profile_raw_data_for_debug_page(
+        self,
+    ) -> None:
+        self.create_profiles()
+
+        result = self.api.get_overview()
+
+        self.assertTrue(result["profiles"]["day"]["valid"])
+        self.assertEqual(
+            result["profiles"]["day"]["raw"]["accent"]["colorizationColor"],
+            "0XD0744DA9",
+        )
+
+    def test_overview_keeps_core_status_when_scheduler_is_unavailable(self) -> None:
+        api = GuiApi(
+            self.layout,
+            executable=self.executable,
+            scheduler_backend=FailingReadScheduler(),
+            lock_factory=FakeLock,
+            shell_actions=self.shell,  # type: ignore[arg-type]
+            clock=FixedClock(),  # type: ignore[arg-type]
+        )
+
+        result = api.get_overview()
+
+        self.assertEqual(result["result"], "partial")
+        self.assertEqual(result["config"]["dayStart"], "06:15")
+        self.assertFalse(result["task"]["available"])
+        self.assertIn("scheduler unavailable", result["message"])
+
+    def test_overview_reports_incomplete_install_backup_without_hiding_core(
+        self,
+    ) -> None:
+        self.layout.install_backup_manifest.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        self.layout.install_backup_manifest.write_text(
+            "{}",
+            encoding="utf-8",
+        )
+
+        result = self.api.get_overview()
+
+        self.assertEqual(result["result"], "partial")
+        self.assertEqual(
+            result["installBackup"]["status"],
+            "invalid",
+        )
+        self.assertEqual(result["config"]["dayStart"], "06:15")
+        self.assertIn("incomplete", result["message"])
+
+    def test_config_validation_is_strict_and_side_effect_free(self) -> None:
+        valid = self.api.validate_config(payload())
+        invalid = self.api.validate_config(payload(extra=True))
+        equal_times = self.api.validate_config(payload(nightStart="06:15"))
+
+        self.assertTrue(valid["valid"])
+        self.assertFalse(invalid["valid"])
+        self.assertFalse(equal_times["valid"])
+        self.assertEqual(self.scheduler.register_count, 0)
+
+    def test_workspace_validation_requires_matching_hex_and_rgb(self) -> None:
+        valid = self.api.validate_workspace(workspace_payload())
+        invalid = self.api.validate_workspace(
+            workspace_payload(
+                dayColor={
+                    "hex": "#744DA9",
+                    "red": 117,
+                    "green": 77,
+                    "blue": 169,
+                }
+            )
+        )
+
+        self.assertTrue(valid["valid"])
+        self.assertEqual(valid["colors"]["day"]["hex"], "#744DA9")
+        self.assertFalse(invalid["valid"])
+        self.assertIn("differ", invalid["message"])
+        self.assertEqual(self.scheduler.register_count, 0)
+
+    def test_save_and_repair_require_confirmation(self) -> None:
+        changed = payload(dayStart="07:00", nightStart="22:30")
+
+        blocked = self.api.save_config(changed)
+        workspace_blocked = self.api.save_workspace(workspace_payload())
+        repair_blocked = self.api.repair_task()
+        identity_blocked = self.api.repair_notification_identity()
+        reset_blocked = self.api.reset_preferences()
+        restore_blocked = self.api.restore_install_appearance()
+        uninstall_blocked = self.api.launch_uninstaller()
+
+        self.assertEqual(blocked["result"], "blocked")
+        self.assertEqual(workspace_blocked["result"], "blocked")
+        self.assertEqual(repair_blocked["result"], "blocked")
+        self.assertEqual(identity_blocked["result"], "blocked")
+        self.assertEqual(reset_blocked["result"], "blocked")
+        self.assertEqual(restore_blocked["result"], "blocked")
+        self.assertEqual(uninstall_blocked["result"], "blocked")
+        self.assertEqual(ConfigStore(self.layout.config).load(), AppConfig.defaults())
+        self.assertEqual(self.scheduler.register_count, 0)
+
+    def test_development_preview_blocks_live_task_and_windows_changes(self) -> None:
+        preview = GuiApi(
+            self.layout,
+            executable=self.executable,
+            scheduler_backend=self.scheduler,
+            lock_factory=FakeLock,
+            shell_actions=self.shell,  # type: ignore[arg-type]
+            clock=FixedClock(),  # type: ignore[arg-type]
+        )
+
+        save = preview.save_config(payload(dayStart="07:00"), True)
+        workspace = preview.save_workspace(workspace_payload(), True)
+        appearance_read = preview.read_current_windows_appearance()
+        repair = preview.repair_task(True)
+        identity = preview.repair_notification_identity(True)
+        reset = preview.reset_preferences(True)
+        restore = preview.restore_install_appearance(True)
+        uninstall = preview.launch_uninstaller(True)
+
+        self.assertEqual(save["result"], "blocked")
+        self.assertEqual(workspace["result"], "blocked")
+        self.assertEqual(appearance_read["result"], "blocked")
+        self.assertEqual(repair["result"], "blocked")
+        self.assertEqual(identity["result"], "blocked")
+        self.assertEqual(reset["result"], "blocked")
+        self.assertEqual(restore["result"], "blocked")
+        self.assertEqual(uninstall["result"], "blocked")
+        self.assertEqual(self.scheduler.register_count, 0)
+
+    def test_system_read_preview_enables_import_but_keeps_writes_blocked(
+        self,
+    ) -> None:
+        preview = GuiApi(
+            self.layout,
+            executable=self.executable,
+            scheduler_backend=self.scheduler,
+            lock_factory=FakeLock,
+            current_appearance_reader=lambda: ThemeVisualState(
+                "0",
+                0xC4FFB900,
+                "Dark",
+                "Dark",
+            ),
+            shell_actions=self.shell,  # type: ignore[arg-type]
+            clock=FixedClock(),  # type: ignore[arg-type]
+            allow_live_writes=False,
+        )
+
+        imported = preview.read_current_windows_appearance()
+        saved = preview.save_workspace(workspace_payload(), True)
+
+        self.assertEqual(imported["result"], "success")
+        self.assertEqual(imported["appMode"], "dark")
+        self.assertEqual(imported["color"]["hex"], "#FFB900")
+        self.assertFalse(imported["dataChanged"])
+        self.assertFalse(imported["windowsChanged"])
+        self.assertEqual(saved["result"], "blocked")
+        self.assertEqual(self.scheduler.register_count, 0)
+
+    def test_confirmed_save_updates_config_and_task(self) -> None:
+        changed = payload(dayStart="07:00", nightStart="22:30")
+
+        result = self.api.save_config(changed, True)
+
+        self.assertEqual(result["result"], "changed")
+        config = ConfigStore(self.layout.config).load()
+        self.assertEqual(config.day_start, "07:00")
+        self.assertEqual(
+            {item.local_time for item in self.scheduler.task.triggers},  # type: ignore[union-attr]
+            {"06:55", "07:00", "22:25", "22:30"},
+        )
+
+    def test_confirmed_workspace_save_updates_profiles_without_windows(
+        self,
+    ) -> None:
+        self.create_profiles()
+        target = workspace_payload(
+            dayStart="07:00",
+            dayColor={
+                "hex": "#102030",
+                "red": 16,
+                "green": 32,
+                "blue": 48,
+            },
+        )
+
+        result = self.api.save_workspace(target, True)
+
+        self.assertEqual(result["result"], "changed")
+        self.assertEqual(result["action"], "save-workspace")
+        self.assertTrue(result["profilesVerified"])
+        self.assertFalse(result["windowsChanged"])
+        self.assertEqual(
+            AccentProfileStore(self.layout.profile_path("day"), "day")
+            .load()
+            .colorization_color,
+            0xD0102030,
+        )
+
+    def test_first_workspace_save_enables_pending_initial_setup_without_sync(
+        self,
+    ) -> None:
+        self.create_profiles()
+        StateStore(self.layout.state).save(AppState.pending_initial_setup())
+        create_initial_setup_marker(self.layout.initial_setup_marker)
+
+        before = self.api.get_overview()
+        result = self.api.save_workspace(workspace_payload(), True)
+        after = self.api.get_overview()
+
+        self.assertTrue(before["initialSetupPending"])
+        self.assertEqual(result["result"], "changed")
+        self.assertTrue(result["initialSetupActivated"])
+        self.assertFalse(StateStore(self.layout.state).load().paused)
+        self.assertFalse(self.layout.initial_setup_marker.exists())
+        self.assertFalse(after["initialSetupPending"])
+        self.assertFalse(result["windowsChanged"])
+
+    def test_first_run_marker_blocks_manual_resume_before_save(self) -> None:
+        StateStore(self.layout.state).save(AppState.pending_initial_setup())
+        create_initial_setup_marker(self.layout.initial_setup_marker)
+
+        result = self.api.set_paused(False, True)
+
+        self.assertEqual(result["result"], "blocked")
+        self.assertTrue(StateStore(self.layout.state).load().paused)
+
+    def test_pause_has_an_explicit_confirmation_gate(self) -> None:
+        self.assertEqual(self.api.set_paused(True)["result"], "blocked")
+        paused = self.api.set_paused(True, True)
+        self.assertTrue(StateStore(self.layout.state).load().paused)
+        self.assertEqual(paused["result"], "changed")
+
+    def test_task_check_and_repair_use_current_frozen_definition(
+        self,
+    ) -> None:
+        checked = self.api.check_task()
+        self.scheduler.task = None
+        drifted = self.api.check_task()
+        repaired = self.api.repair_task(True)
+
+        self.assertEqual(checked["result"], "success")
+        self.assertEqual(drifted["result"], "drift")
+        self.assertEqual(repaired["result"], "changed")
+        self.assertTrue(repaired["taskVerified"])
+
+    def test_health_check_and_identity_repair_are_separate_actions(
+        self,
+    ) -> None:
+        checked = self.api.check_health()
+        repaired = self.api.repair_notification_identity(True)
+
+        self.assertEqual(checked["result"], "repairable")
+        self.assertEqual(checked["status"], "repairable")
+        self.assertFalse(checked["windowsChanged"])
+        self.assertEqual(repaired["result"], "changed")
+        self.assertEqual(self.identity_repair.calls, 1)
+
+    def test_reset_preferences_preserves_profile_modes_and_repairs_task(
+        self,
+    ) -> None:
+        custom = AppConfig(
+            "08:00",
+            "20:00",
+            "dark",
+            "light",
+            False,
+            False,
+        )
+        ConfigStore(self.layout.config).save(custom)
+        self.scheduler.task = build_task_spec(
+            custom,
+            executable=str(self.executable.resolve()),
+            user_id=USER_ID,
+        )
+
+        result = self.api.reset_preferences(True)
+
+        actual = ConfigStore(self.layout.config).load()
+        self.assertEqual(result["result"], "changed")
+        self.assertEqual(actual.day_start, "06:15")
+        self.assertEqual(actual.night_start, "23:45")
+        self.assertTrue(actual.notify_errors)
+        self.assertTrue(actual.notify_status_changes)
+        self.assertEqual(actual.day_apps_theme, "dark")
+        self.assertEqual(actual.night_apps_theme, "light")
+        self.assertEqual(
+            {item.local_time for item in self.scheduler.task.triggers},  # type: ignore[union-attr]
+            {"06:10", "06:15", "23:40", "23:45"},
+        )
+
+    def test_restore_and_uninstaller_are_separately_confirmed(self) -> None:
+        restored = self.api.restore_install_appearance(True)
+        launched = self.api.launch_uninstaller(True)
+
+        self.assertEqual(restored["result"], "restored")
+        self.assertTrue(restored["systemModePreserved"])
+        self.assertEqual(self.maintenance.calls, 1)
+        self.assertEqual(launched["result"], "success")
+        self.assertEqual(self.shell.opened, ["uninstaller"])
+
+    def test_shell_navigation_is_allowlisted(self) -> None:
+        opened = self.api.open_target("colors")
+        rejected = self.api.open_target("arbitrary-path")
+
+        self.assertEqual(opened["result"], "success")
+        self.assertEqual(self.shell.opened, ["colors"])
+        self.assertEqual(rejected["result"], "failed")
+
+
+class GuiAssetsAndRuntimeTests(unittest.TestCase):
+    def test_gui_module_delays_workbench_import_until_launch(self) -> None:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import sys; import theme_scheduler.gui; "
+                    "assert 'theme_scheduler.workbench' not in sys.modules"
+                ),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+
+    @patch("theme_scheduler.workbench.shell.os.startfile", create=True)
+    @patch("theme_scheduler.workbench.shell.os.name", "nt")
+    def test_uninstaller_launch_is_derived_from_frozen_layout(self, startfile) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            layout = UserDataLayout(root / "Data" / "ThemeScheduler")
+            executable = (
+                root / "Programs" / "ThemeScheduler" / "app" / "ThemeScheduler.exe"
+            )
+            uninstaller = (
+                root / "Programs" / "ThemeScheduler" / "maintenance" / "Uninstall.exe"
+            )
+            executable.parent.mkdir(parents=True)
+            executable.touch()
+            uninstaller.parent.mkdir(parents=True)
+            uninstaller.touch()
+
+            ShellActions(layout, executable).open("uninstaller")
+
+            startfile.assert_called_once_with(str(uninstaller))
+
+    def test_frontend_is_local_and_references_only_packaged_assets(self) -> None:
+        entry = frontend_entry()
+        html = entry.read_text(encoding="utf-8")
+        script = (entry.parent.parent / "js" / "workbench.js").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertNotIn("http://", html)
+        self.assertNotIn("https://", html)
+        self.assertIn('href="../css/workbench.css"', html)
+        self.assertIn('src="../js/workbench.js"', html)
+        self.assertIn("window.pywebview.api.save_workspace", script)
+        self.assertNotIn("save_and_apply_workspace", script)
+        self.assertIn(
+            "window.pywebview.api.read_current_windows_appearance",
+            script,
+        )
+        self.assertIn("window.pywebview.api.validate_workspace", script)
+        self.assertNotIn("sync_now", script)
+        self.assertIn(
+            "window.pywebview.api.restore_install_appearance",
+            script,
+        )
+        self.assertIn(
+            "window.pywebview.api.reset_preferences",
+            script,
+        )
+        self.assertIn(
+            "window.pywebview.api.launch_uninstaller",
+            script,
+        )
+        self.assertIn("window.themeSchedulerOpenHealth", script)
+        self.assertIn('id="task-report"', html)
+        self.assertIn('id="state-profile-report"', html)
+        self.assertIn('id="recent-log-report"', html)
+        self.assertIn('id="copy-diagnostic-button"', html)
+        self.assertIn("需要修复", script)
+        self.assertIn("scrollIntoView", script)
+        self.assertIn('id="install-backup-state"', html)
+        self.assertIn('id="initial-setup-banner"', html)
+        self.assertIn('id="run-actions"', html)
+        self.assertIn("initialSetupPending", script)
+        self.assertIn('class="command-group run-actions" id="run-actions" hidden', html)
+        self.assertNotIn('$("#run-actions").hidden =', script)
+        self.assertIn("保存并启用", script)
+
+    def test_source_launch_requires_explicit_data_root(self) -> None:
+        with self.assertRaises(ValueError):
+            launch_gui(data_root=None, installed=False)
+
+    def test_development_live_writes_require_explicit_executable(self) -> None:
+        with self.assertRaises(ValueError):
+            launch_gui(
+                data_root=PROJECT_ROOT / "artifacts" / "acceptance" / "stage7",
+                installed=False,
+                allow_live_writes=True,
+            )
+
+    def test_preview_factory_does_not_require_installed_program_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            layout = UserDataLayout(Path(directory))
+            api = create_live_gui_api(
+                layout,
+                Path(sys.executable),
+                allow_live_writes=False,
+            )
+
+            self.assertEqual(
+                api.launch_uninstaller(True)["result"],
+                "blocked",
+            )
+            self.assertEqual(
+                api.repair_notification_identity(True)["result"],
+                "blocked",
+            )
+
+    def test_preview_factory_can_enable_only_system_appearance_reads(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            layout = UserDataLayout(Path(directory))
+            api = create_live_gui_api(
+                layout,
+                Path(sys.executable),
+                allow_live_writes=False,
+                allow_system_reads=True,
+            )
+
+            self.assertIsNotNone(api._current_appearance_reader)
+            self.assertEqual(
+                api.save_workspace(workspace_payload(), True)["result"],
+                "blocked",
+            )
+
+    def test_live_executable_rejects_interpreter_and_missing_target(self) -> None:
+        with self.assertRaisesRegex(ValueError, "interpreter"):
+            validate_live_executable(Path(sys.executable))
+        with self.assertRaises(FileNotFoundError):
+            validate_live_executable(PROJECT_ROOT / "missing.exe")
+
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "ThemeScheduler.exe"
+            target.touch()
+            self.assertEqual(validate_live_executable(target), target.resolve())
+
+    def test_auto_entry_does_not_import_gui_or_webview(self) -> None:
+        source = (SOURCE_ROOT / "theme_scheduler" / "cli" / "auto.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("theme_scheduler.gui", source)
+        self.assertNotIn("import webview", source)
+
+        formal_source = (SOURCE_ROOT / "theme_scheduler" / "cli" / "app.py").read_text(
+            encoding="utf-8"
+        )
+        auto_branch = formal_source.split('if command == "auto":', 1)[1].split(
+            'if command in {"gui", "maintenance"}:', 1
+        )[0]
+        self.assertNotIn("theme_scheduler.gui", auto_branch)
+        self.assertNotIn("import webview", formal_source)
+
+    def test_maintenance_fragment_is_packaged_local_content(self) -> None:
+        html = frontend_entry().read_text(encoding="utf-8")
+        self.assertIn('id="maintenance"', html)
+
+    def test_runtime_detection_accepts_nonzero_version_and_rejects_missing(
+        self,
+    ) -> None:
+        class Present:
+            def versions(self):
+                return [("current-user", "135.0.3179.98")]
+
+        class Missing:
+            def versions(self):
+                return []
+
+        present = detect_webview2_runtime(Present())
+        missing = detect_webview2_runtime(Missing())
+
+        self.assertTrue(present.available)
+        self.assertEqual(present.version, "135.0.3179.98")
+        self.assertFalse(missing.available)
+        self.assertEqual(
+            WEBVIEW2_CLIENT_ID,
+            "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+        )

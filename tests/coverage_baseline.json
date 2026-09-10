@@ -1,0 +1,895 @@
+{
+  "coverageVersion": "7.15.3",
+  "files": {
+    "src/theme_scheduler/__init__.py": {
+      "branchRate": 100.0,
+      "branches": 0,
+      "coveredBranches": 0,
+      "coveredLines": 2,
+      "lineRate": 100.0,
+      "statements": 2
+    },
+    "src/theme_scheduler/accent.py": {
+      "branchRate": 62.766,
+      "branches": 94,
+      "coveredBranches": 59,
+      "coveredLines": 193,
+      "lineRate": 68.1979,
+      "statements": 283
+    },
+    "src/theme_scheduler/accent_profile.py": {
+      "branchRate": 68.1818,
+      "branches": 44,
+      "coveredBranches": 30,
+      "coveredLines": 112,
+      "lineRate": 86.1538,
+      "statements": 130
+    },
+    "src/theme_scheduler/accent_service.py": {
+      "branchRate": 53.5714,
+      "branches": 28,
+      "coveredBranches": 15,
+      "coveredLines": 94,
+      "lineRate": 81.0345,
+      "statements": 116
+    },
+    "src/theme_scheduler/accent_theme.py": {
+      "branchRate": 39.6552,
+      "branches": 116,
+      "coveredBranches": 46,
+      "coveredLines": 195,
+      "lineRate": 61.9048,
+      "statements": 315
+    },
+    "src/theme_scheduler/auto_transaction.py": {
+      "branchRate": 63.7931,
+      "branches": 58,
+      "coveredBranches": 37,
+      "coveredLines": 112,
+      "lineRate": 82.963,
+      "statements": 135
+    },
+    "src/theme_scheduler/automation/__init__.py": {
+      "branchRate": 100.0,
+      "branches": 0,
+      "coveredBranches": 0,
+      "coveredLines": 4,
+      "lineRate": 100.0,
+      "statements": 4
+    },
+    "src/theme_scheduler/automation/backend.py": {
+      "branchRate": 0.0,
+      "branches": 4,
+      "coveredBranches": 0,
+      "coveredLines": 18,
+      "lineRate": 52.9412,
+      "statements": 34
+    },
+    "src/theme_scheduler/automation/contracts.py": {
+      "branchRate": 100.0,
+      "branches": 0,
+      "coveredBranches": 0,
+      "coveredLines": 16,
+      "lineRate": 88.8889,
+      "statements": 18
+    },
+    "src/theme_scheduler/automation/failure.py": {
+      "branchRate": 25.0,
+      "branches": 4,
+      "coveredBranches": 1,
+      "coveredLines": 19,
+      "lineRate": 65.5172,
+      "statements": 29
+    },
+    "src/theme_scheduler/automation/outcome.py": {
+      "branchRate": 100.0,
+      "branches": 0,
+      "coveredBranches": 0,
+      "coveredLines": 18,
+      "lineRate": 90.0,
+      "statements": 20
+    },
+    "src/theme_scheduler/automation/recovery.py": {
+      "branchRate": 65.3846,
+      "branches": 52,
+      "coveredBranches": 34,
+      "coveredLines": 84,
+      "lineRate": 68.8525,
+      "statements": 122
+    },
+    "src/theme_scheduler/automation/runner.py": {
+      "branchRate": 82.5,
+      "branches": 40,
+      "coveredBranches": 33,
+      "coveredLines": 227,
+      "lineRate": 84.3866,
+      "statements": 269
+    },
+    "src/theme_scheduler/backup.py": {
+      "branchRate": 65.7143,
+      "branches": 70,
+      "coveredBranches": 46,
+      "coveredLines": 149,
+      "lineRate": 84.1808,
+      "statements": 177
+    },
+    "src/theme_scheduler/cli/__init__.py": {
+      "branchRate": 100.0,
+      "branches": 0,
+      "coveredBranches": 0,
+      "coveredLines": 0,
+      "lineRate": 100.0,
+      "statements": 0
+    },
+    "src/theme_scheduler/cli/accent.py": {
+      "branchRate": 34.8485,
+      "branches": 66,
+      "coveredBranches": 23,
+      "coveredLines": 96,
+      "lineRate": 39.5062,
+      "statements": 243
+    },
+    "src/theme_scheduler/cli/app.py": {
+      "branchRate": 75.0,
+      "branches": 24,
+      "coveredBranches": 18,
+      "coveredLines": 30,
+      "lineRate": 76.9231,
+      "statements": 39
+    },
+    "src/theme_scheduler/cli/auto.py": {
+      "branchRate": 43.3333,
+      "branches": 30,
+      "coveredBranches": 13,
+      "coveredLines": 84,
+      "lineRate": 62.2222,
+      "statements": 135
+    },
+    "src/theme_scheduler/cli/control.py": {
+      "branchRate": 83.3333,
+      "branches": 12,
+      "coveredBranches": 10,
+      "coveredLines": 47,
+      "lineRate": 90.3846,
+      "statements": 52
+    },
+    "src/theme_scheduler/cli/data.py": {
+      "branchRate": 70.0,
+      "branches": 20,
+      "coveredBranches": 14,
+      "coveredLines": 86,
+      "lineRate": 90.5263,
+      "statements": 95
+    },
+    "src/theme_scheduler/cli/gui.py": {
+      "branchRate": 100.0,
+      "branches": 0,
+      "coveredBranches": 0,
+      "coveredLines": 8,
+      "lineRate": 38.0952,
+      "statements": 21
+    },
+    "src/theme_scheduler/cli/maintenance.py": {
+      "branchRate": 70.0,
+      "branches": 10,
+      "coveredBranches": 7,
+      "coveredLines": 49,
+      "lineRate": 80.3279,
+      "statements": 61
+    },
+    "src/theme_scheduler/cli/notification_action.py": {
+      "branchRate": 50.0,
+      "branches": 6,
+      "coveredBranches": 3,
+      "coveredLines": 21,
+      "lineRate": 67.7419,
+      "statements": 31
+    },
+    "src/theme_scheduler/cli/preview.py": {
+      "branchRate": 50.0,
+      "branches": 2,
+      "coveredBranches": 1,
+      "coveredLines": 40,
+      "lineRate": 90.9091,
+      "statements": 44
+    },
+    "src/theme_scheduler/cli/scheduler.py": {
+      "branchRate": 90.625,
+      "branches": 32,
+      "coveredBranches": 29,
+      "coveredLines": 94,
+      "lineRate": 96.9072,
+      "statements": 97
+    },
+    "src/theme_scheduler/cli/system_integration.py": {
+      "branchRate": 16.6667,
+      "branches": 30,
+      "coveredBranches": 5,
+      "coveredLines": 63,
+      "lineRate": 51.6393,
+      "statements": 122
+    },
+    "src/theme_scheduler/cli/theme.py": {
+      "branchRate": 18.75,
+      "branches": 16,
+      "coveredBranches": 3,
+      "coveredLines": 34,
+      "lineRate": 41.9753,
+      "statements": 81
+    },
+    "src/theme_scheduler/cli/uninstall.py": {
+      "branchRate": 62.8571,
+      "branches": 70,
+      "coveredBranches": 44,
+      "coveredLines": 159,
+      "lineRate": 76.0766,
+      "statements": 209
+    },
+    "src/theme_scheduler/config.py": {
+      "branchRate": 65.3846,
+      "branches": 26,
+      "coveredBranches": 17,
+      "coveredLines": 83,
+      "lineRate": 88.2979,
+      "statements": 94
+    },
+    "src/theme_scheduler/configuration_service.py": {
+      "branchRate": 73.6842,
+      "branches": 38,
+      "coveredBranches": 28,
+      "coveredLines": 156,
+      "lineRate": 85.7143,
+      "statements": 182
+    },
+    "src/theme_scheduler/control.py": {
+      "branchRate": 50.0,
+      "branches": 10,
+      "coveredBranches": 5,
+      "coveredLines": 47,
+      "lineRate": 90.3846,
+      "statements": 52
+    },
+    "src/theme_scheduler/control_service.py": {
+      "branchRate": 69.2308,
+      "branches": 26,
+      "coveredBranches": 18,
+      "coveredLines": 83,
+      "lineRate": 85.567,
+      "statements": 97
+    },
+    "src/theme_scheduler/core.py": {
+      "branchRate": 73.3333,
+      "branches": 30,
+      "coveredBranches": 22,
+      "coveredLines": 86,
+      "lineRate": 91.4894,
+      "statements": 94
+    },
+    "src/theme_scheduler/diagnostics.py": {
+      "branchRate": 68.0,
+      "branches": 50,
+      "coveredBranches": 34,
+      "coveredLines": 100,
+      "lineRate": 74.0741,
+      "statements": 135
+    },
+    "src/theme_scheduler/errors.py": {
+      "branchRate": 100.0,
+      "branches": 0,
+      "coveredBranches": 0,
+      "coveredLines": 4,
+      "lineRate": 100.0,
+      "statements": 4
+    },
+    "src/theme_scheduler/execution_lock.py": {
+      "branchRate": 41.6667,
+      "branches": 24,
+      "coveredBranches": 10,
+      "coveredLines": 51,
+      "lineRate": 62.963,
+      "statements": 81
+    },
+    "src/theme_scheduler/explorer_recovery.py": {
+      "branchRate": 0.0,
+      "branches": 10,
+      "coveredBranches": 0,
+      "coveredLines": 13,
+      "lineRate": 35.1351,
+      "statements": 37
+    },
+    "src/theme_scheduler/gui.py": {
+      "branchRate": 46.4286,
+      "branches": 28,
+      "coveredBranches": 13,
+      "coveredLines": 29,
+      "lineRate": 46.7742,
+      "statements": 62
+    },
+    "src/theme_scheduler/gui_activation.py": {
+      "branchRate": 0.0,
+      "branches": 20,
+      "coveredBranches": 0,
+      "coveredLines": 20,
+      "lineRate": 27.7778,
+      "statements": 72
+    },
+    "src/theme_scheduler/health_contracts.py": {
+      "branchRate": 77.2727,
+      "branches": 22,
+      "coveredBranches": 17,
+      "coveredLines": 69,
+      "lineRate": 90.7895,
+      "statements": 76
+    },
+    "src/theme_scheduler/health_service.py": {
+      "branchRate": 50.0,
+      "branches": 28,
+      "coveredBranches": 14,
+      "coveredLines": 131,
+      "lineRate": 77.5148,
+      "statements": 169
+    },
+    "src/theme_scheduler/initial_setup.py": {
+      "branchRate": 64.2857,
+      "branches": 14,
+      "coveredBranches": 9,
+      "coveredLines": 32,
+      "lineRate": 78.0488,
+      "statements": 41
+    },
+    "src/theme_scheduler/lifecycle/__init__.py": {
+      "branchRate": 100.0,
+      "branches": 0,
+      "coveredBranches": 0,
+      "coveredLines": 6,
+      "lineRate": 100.0,
+      "statements": 6
+    },
+    "src/theme_scheduler/lifecycle/_validation.py": {
+      "branchRate": 65.9091,
+      "branches": 44,
+      "coveredBranches": 29,
+      "coveredLines": 100,
+      "lineRate": 83.3333,
+      "statements": 120
+    },
+    "src/theme_scheduler/lifecycle/deployment/__init__.py": {
+      "branchRate": 100.0,
+      "branches": 0,
+      "coveredBranches": 0,
+      "coveredLines": 5,
+      "lineRate": 100.0,
+      "statements": 5
+    },
+    "src/theme_scheduler/lifecycle/deployment/_shared.py": {
+      "branchRate": 64.2857,
+      "branches": 42,
+      "coveredBranches": 27,
+      "coveredLines": 80,
+      "lineRate": 80.8081,
+      "statements": 99
+    },
+    "src/theme_scheduler/lifecycle/deployment/filesystem.py": {
+      "branchRate": 100.0,
+      "branches": 0,
+      "coveredBranches": 0,
+      "coveredLines": 15,
+      "lineRate": 100.0,
+      "statements": 15
+    },
+    "src/theme_scheduler/lifecycle/deployment/journal.py": {
+      "branchRate": 63.6364,
+      "branches": 44,
+      "coveredBranches": 28,
+      "coveredLines": 71,
+      "lineRate": 81.6092,
+      "statements": 87
+    },
+    "src/theme_scheduler/lifecycle/deployment/service.py": {
+      "branchRate": 71.875,
+      "branches": 96,
+      "coveredBranches": 69,
+      "coveredLines": 286,
+      "lineRate": 88.0,
+      "statements": 325
+    },
+    "src/theme_scheduler/lifecycle/installation.py": {
+      "branchRate": 62.5,
+      "branches": 40,
+      "coveredBranches": 25,
+      "coveredLines": 107,
+      "lineRate": 87.7049,
+      "statements": 122
+    },
+    "src/theme_scheduler/lifecycle/layout.py": {
+      "branchRate": 81.25,
+      "branches": 16,
+      "coveredBranches": 13,
+      "coveredLines": 70,
+      "lineRate": 95.8904,
+      "statements": 73
+    },
+    "src/theme_scheduler/lifecycle/payload.py": {
+      "branchRate": 72.7273,
+      "branches": 44,
+      "coveredBranches": 32,
+      "coveredLines": 82,
+      "lineRate": 88.172,
+      "statements": 93
+    },
+    "src/theme_scheduler/lifecycle/transaction.py": {
+      "branchRate": 73.2143,
+      "branches": 56,
+      "coveredBranches": 41,
+      "coveredLines": 87,
+      "lineRate": 85.2941,
+      "statements": 102
+    },
+    "src/theme_scheduler/log_policy.py": {
+      "branchRate": 65.2174,
+      "branches": 46,
+      "coveredBranches": 30,
+      "coveredLines": 106,
+      "lineRate": 86.1789,
+      "statements": 123
+    },
+    "src/theme_scheduler/maintenance_service.py": {
+      "branchRate": 83.3333,
+      "branches": 18,
+      "coveredBranches": 15,
+      "coveredLines": 116,
+      "lineRate": 95.082,
+      "statements": 122
+    },
+    "src/theme_scheduler/notification_action_service.py": {
+      "branchRate": 30.0,
+      "branches": 20,
+      "coveredBranches": 6,
+      "coveredLines": 90,
+      "lineRate": 76.9231,
+      "statements": 117
+    },
+    "src/theme_scheduler/notification_contracts.py": {
+      "branchRate": 77.7778,
+      "branches": 18,
+      "coveredBranches": 14,
+      "coveredLines": 54,
+      "lineRate": 93.1034,
+      "statements": 58
+    },
+    "src/theme_scheduler/notification_dedup.py": {
+      "branchRate": 63.8889,
+      "branches": 36,
+      "coveredBranches": 23,
+      "coveredLines": 80,
+      "lineRate": 86.0215,
+      "statements": 93
+    },
+    "src/theme_scheduler/notification_identity_service.py": {
+      "branchRate": 72.2222,
+      "branches": 18,
+      "coveredBranches": 13,
+      "coveredLines": 83,
+      "lineRate": 81.3725,
+      "statements": 102
+    },
+    "src/theme_scheduler/notification_protocol.py": {
+      "branchRate": 64.2857,
+      "branches": 14,
+      "coveredBranches": 9,
+      "coveredLines": 49,
+      "lineRate": 87.5,
+      "statements": 56
+    },
+    "src/theme_scheduler/notifications_windows.py": {
+      "branchRate": 72.2222,
+      "branches": 18,
+      "coveredBranches": 13,
+      "coveredLines": 75,
+      "lineRate": 91.4634,
+      "statements": 82
+    },
+    "src/theme_scheduler/persistence.py": {
+      "branchRate": 70.0,
+      "branches": 30,
+      "coveredBranches": 21,
+      "coveredLines": 101,
+      "lineRate": 90.1786,
+      "statements": 112
+    },
+    "src/theme_scheduler/protocol_registration.py": {
+      "branchRate": 77.7778,
+      "branches": 18,
+      "coveredBranches": 14,
+      "coveredLines": 50,
+      "lineRate": 90.9091,
+      "statements": 55
+    },
+    "src/theme_scheduler/protocol_registration_windows.py": {
+      "branchRate": 75.0,
+      "branches": 32,
+      "coveredBranches": 24,
+      "coveredLines": 123,
+      "lineRate": 90.4412,
+      "statements": 136
+    },
+    "src/theme_scheduler/resources.py": {
+      "branchRate": 100.0,
+      "branches": 0,
+      "coveredBranches": 0,
+      "coveredLines": 7,
+      "lineRate": 100.0,
+      "statements": 7
+    },
+    "src/theme_scheduler/runtime_retention.py": {
+      "branchRate": 70.0,
+      "branches": 30,
+      "coveredBranches": 21,
+      "coveredLines": 63,
+      "lineRate": 87.5,
+      "statements": 72
+    },
+    "src/theme_scheduler/scheduled_auto.py": {
+      "branchRate": 58.5366,
+      "branches": 82,
+      "coveredBranches": 48,
+      "coveredLines": 245,
+      "lineRate": 79.0323,
+      "statements": 310
+    },
+    "src/theme_scheduler/scheduled_notifications.py": {
+      "branchRate": 75.0,
+      "branches": 8,
+      "coveredBranches": 6,
+      "coveredLines": 39,
+      "lineRate": 95.122,
+      "statements": 41
+    },
+    "src/theme_scheduler/scheduler/__init__.py": {
+      "branchRate": 100.0,
+      "branches": 0,
+      "coveredBranches": 0,
+      "coveredLines": 8,
+      "lineRate": 100.0,
+      "statements": 8
+    },
+    "src/theme_scheduler/scheduler/_validation.py": {
+      "branchRate": 62.5,
+      "branches": 16,
+      "coveredBranches": 10,
+      "coveredLines": 30,
+      "lineRate": 83.3333,
+      "statements": 36
+    },
+    "src/theme_scheduler/scheduler/constants.py": {
+      "branchRate": 100.0,
+      "branches": 0,
+      "coveredBranches": 0,
+      "coveredLines": 17,
+      "lineRate": 100.0,
+      "statements": 17
+    },
+    "src/theme_scheduler/scheduler/errors.py": {
+      "branchRate": 100.0,
+      "branches": 0,
+      "coveredBranches": 0,
+      "coveredLines": 8,
+      "lineRate": 100.0,
+      "statements": 8
+    },
+    "src/theme_scheduler/scheduler/inspection.py": {
+      "branchRate": 100.0,
+      "branches": 12,
+      "coveredBranches": 12,
+      "coveredLines": 40,
+      "lineRate": 100.0,
+      "statements": 40
+    },
+    "src/theme_scheduler/scheduler/models.py": {
+      "branchRate": 53.3333,
+      "branches": 30,
+      "coveredBranches": 16,
+      "coveredLines": 91,
+      "lineRate": 86.6667,
+      "statements": 105
+    },
+    "src/theme_scheduler/scheduler/mutation.py": {
+      "branchRate": 69.2308,
+      "branches": 26,
+      "coveredBranches": 18,
+      "coveredLines": 76,
+      "lineRate": 86.3636,
+      "statements": 88
+    },
+    "src/theme_scheduler/scheduler/specification.py": {
+      "branchRate": 58.8235,
+      "branches": 34,
+      "coveredBranches": 20,
+      "coveredLines": 47,
+      "lineRate": 77.0492,
+      "statements": 61
+    },
+    "src/theme_scheduler/scheduler/triggers.py": {
+      "branchRate": 56.25,
+      "branches": 16,
+      "coveredBranches": 9,
+      "coveredLines": 59,
+      "lineRate": 86.7647,
+      "statements": 68
+    },
+    "src/theme_scheduler/scheduler_windows.py": {
+      "branchRate": 50.0,
+      "branches": 44,
+      "coveredBranches": 22,
+      "coveredLines": 91,
+      "lineRate": 79.8246,
+      "statements": 114
+    },
+    "src/theme_scheduler/setup_contracts.py": {
+      "branchRate": 71.0526,
+      "branches": 38,
+      "coveredBranches": 27,
+      "coveredLines": 90,
+      "lineRate": 89.1089,
+      "statements": 101
+    },
+    "src/theme_scheduler/setup_data.py": {
+      "branchRate": 87.5,
+      "branches": 24,
+      "coveredBranches": 21,
+      "coveredLines": 82,
+      "lineRate": 92.1348,
+      "statements": 89
+    },
+    "src/theme_scheduler/setup_gui.py": {
+      "branchRate": 0.0,
+      "branches": 6,
+      "coveredBranches": 0,
+      "coveredLines": 7,
+      "lineRate": 28.0,
+      "statements": 25
+    },
+    "src/theme_scheduler/setup_gui_api.py": {
+      "branchRate": 54.5455,
+      "branches": 44,
+      "coveredBranches": 24,
+      "coveredLines": 142,
+      "lineRate": 80.226,
+      "statements": 177
+    },
+    "src/theme_scheduler/setup_preview.py": {
+      "branchRate": 58.3333,
+      "branches": 12,
+      "coveredBranches": 7,
+      "coveredLines": 34,
+      "lineRate": 80.9524,
+      "statements": 42
+    },
+    "src/theme_scheduler/setup_service.py": {
+      "branchRate": 64.2857,
+      "branches": 14,
+      "coveredBranches": 9,
+      "coveredLines": 100,
+      "lineRate": 92.5926,
+      "statements": 108
+    },
+    "src/theme_scheduler/setup_windows.py": {
+      "branchRate": 10.0,
+      "branches": 10,
+      "coveredBranches": 1,
+      "coveredLines": 36,
+      "lineRate": 47.3684,
+      "statements": 76
+    },
+    "src/theme_scheduler/state.py": {
+      "branchRate": 71.4286,
+      "branches": 28,
+      "coveredBranches": 20,
+      "coveredLines": 85,
+      "lineRate": 85.0,
+      "statements": 100
+    },
+    "src/theme_scheduler/storage.py": {
+      "branchRate": 50.0,
+      "branches": 6,
+      "coveredBranches": 3,
+      "coveredLines": 57,
+      "lineRate": 91.9355,
+      "statements": 62
+    },
+    "src/theme_scheduler/switch_override.py": {
+      "branchRate": 69.4444,
+      "branches": 72,
+      "coveredBranches": 50,
+      "coveredLines": 160,
+      "lineRate": 85.1064,
+      "statements": 188
+    },
+    "src/theme_scheduler/system_integration.py": {
+      "branchRate": 62.766,
+      "branches": 94,
+      "coveredBranches": 59,
+      "coveredLines": 239,
+      "lineRate": 86.9091,
+      "statements": 275
+    },
+    "src/theme_scheduler/system_integration_backup.py": {
+      "branchRate": 51.0204,
+      "branches": 98,
+      "coveredBranches": 50,
+      "coveredLines": 171,
+      "lineRate": 75.3304,
+      "statements": 227
+    },
+    "src/theme_scheduler/system_integration_windows.py": {
+      "branchRate": 56.6667,
+      "branches": 90,
+      "coveredBranches": 51,
+      "coveredLines": 198,
+      "lineRate": 77.9528,
+      "statements": 254
+    },
+    "src/theme_scheduler/theme.py": {
+      "branchRate": 65.1515,
+      "branches": 66,
+      "coveredBranches": 43,
+      "coveredLines": 178,
+      "lineRate": 71.7742,
+      "statements": 248
+    },
+    "src/theme_scheduler/uninstall_contracts.py": {
+      "branchRate": 61.6279,
+      "branches": 86,
+      "coveredBranches": 53,
+      "coveredLines": 208,
+      "lineRate": 84.2105,
+      "statements": 247
+    },
+    "src/theme_scheduler/uninstall_gui.py": {
+      "branchRate": 41.6667,
+      "branches": 12,
+      "coveredBranches": 5,
+      "coveredLines": 33,
+      "lineRate": 62.2642,
+      "statements": 53
+    },
+    "src/theme_scheduler/uninstall_gui_api.py": {
+      "branchRate": 35.7143,
+      "branches": 42,
+      "coveredBranches": 15,
+      "coveredLines": 116,
+      "lineRate": 66.6667,
+      "statements": 174
+    },
+    "src/theme_scheduler/uninstall_preview.py": {
+      "branchRate": 75.0,
+      "branches": 8,
+      "coveredBranches": 6,
+      "coveredLines": 34,
+      "lineRate": 87.1795,
+      "statements": 39
+    },
+    "src/theme_scheduler/uninstall_service.py": {
+      "branchRate": 62.6866,
+      "branches": 134,
+      "coveredBranches": 84,
+      "coveredLines": 295,
+      "lineRate": 79.9458,
+      "statements": 369
+    },
+    "src/theme_scheduler/uninstall_windows.py": {
+      "branchRate": 45.122,
+      "branches": 82,
+      "coveredBranches": 37,
+      "coveredLines": 143,
+      "lineRate": 65.8986,
+      "statements": 217
+    },
+    "src/theme_scheduler/webview_runtime.py": {
+      "branchRate": 25.0,
+      "branches": 12,
+      "coveredBranches": 3,
+      "coveredLines": 25,
+      "lineRate": 53.1915,
+      "statements": 47
+    },
+    "src/theme_scheduler/windows_identity.py": {
+      "branchRate": 30.0,
+      "branches": 10,
+      "coveredBranches": 3,
+      "coveredLines": 26,
+      "lineRate": 52.0,
+      "statements": 50
+    },
+    "src/theme_scheduler/windows_subprocess.py": {
+      "branchRate": 50.0,
+      "branches": 2,
+      "coveredBranches": 1,
+      "coveredLines": 10,
+      "lineRate": 90.9091,
+      "statements": 11
+    },
+    "src/theme_scheduler/workbench/__init__.py": {
+      "branchRate": 100.0,
+      "branches": 0,
+      "coveredBranches": 0,
+      "coveredLines": 5,
+      "lineRate": 100.0,
+      "statements": 5
+    },
+    "src/theme_scheduler/workbench/api.py": {
+      "branchRate": 100.0,
+      "branches": 0,
+      "coveredBranches": 0,
+      "coveredLines": 28,
+      "lineRate": 100.0,
+      "statements": 28
+    },
+    "src/theme_scheduler/workbench/configuration.py": {
+      "branchRate": 88.8889,
+      "branches": 18,
+      "coveredBranches": 16,
+      "coveredLines": 71,
+      "lineRate": 84.5238,
+      "statements": 84
+    },
+    "src/theme_scheduler/workbench/contracts.py": {
+      "branchRate": 100.0,
+      "branches": 0,
+      "coveredBranches": 0,
+      "coveredLines": 133,
+      "lineRate": 97.0803,
+      "statements": 137
+    },
+    "src/theme_scheduler/workbench/factory.py": {
+      "branchRate": 50.0,
+      "branches": 2,
+      "coveredBranches": 1,
+      "coveredLines": 27,
+      "lineRate": 65.8537,
+      "statements": 41
+    },
+    "src/theme_scheduler/workbench/maintenance.py": {
+      "branchRate": 89.2857,
+      "branches": 28,
+      "coveredBranches": 25,
+      "coveredLines": 85,
+      "lineRate": 83.3333,
+      "statements": 102
+    },
+    "src/theme_scheduler/workbench/overview.py": {
+      "branchRate": 83.3333,
+      "branches": 12,
+      "coveredBranches": 10,
+      "coveredLines": 75,
+      "lineRate": 84.2697,
+      "statements": 89
+    },
+    "src/theme_scheduler/workbench/parsing.py": {
+      "branchRate": 64.2857,
+      "branches": 14,
+      "coveredBranches": 9,
+      "coveredLines": 37,
+      "lineRate": 84.0909,
+      "statements": 44
+    },
+    "src/theme_scheduler/workbench/shell.py": {
+      "branchRate": 38.8889,
+      "branches": 18,
+      "coveredBranches": 7,
+      "coveredLines": 20,
+      "lineRate": 58.8235,
+      "statements": 34
+    }
+  },
+  "kind": "themescheduler.coverage-baseline",
+  "schemaVersion": 1,
+  "totals": {
+    "branchRate": 60.4899,
+    "branches": 3184,
+    "coveredBranches": 1926,
+    "coveredLines": 8565,
+    "lineRate": 78.5708,
+    "statements": 10901
+  }
+}

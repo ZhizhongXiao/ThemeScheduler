@@ -1,0 +1,37 @@
+{
+  "capturedAt": "2026-07-22T23:50:00+08:00",
+  "keys": [
+    {
+      "exists": true,
+      "path": "Software\\Example\\Personalize",
+      "purpose": "test fixture",
+      "root": "HKEY_CURRENT_USER",
+      "values": [
+        {
+          "data": 0,
+          "name": "AppsUseLightTheme",
+          "typeCode": 4,
+          "typeName": "REG_DWORD"
+        },
+        {
+          "data": {
+            "encoding": "hex",
+            "value": "01020304"
+          },
+          "name": "Palette",
+          "typeCode": 3,
+          "typeName": "REG_BINARY"
+        },
+        {
+          "data": 0,
+          "name": "SystemUsesLightTheme",
+          "typeCode": 4,
+          "typeName": "REG_DWORD"
+        }
+      ]
+    }
+  ],
+  "kind": "themescheduler.registry-baseline",
+  "schemaVersion": 1
+}
+

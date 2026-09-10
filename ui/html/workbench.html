@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>ThemeScheduler</title>
+    <link rel="stylesheet" href="../css/tokens.css">
+    <link rel="stylesheet" href="../css/workbench.css">
+    <link id="workbench-light-theme" rel="stylesheet" href="../css/workbench-light.css" media="(prefers-color-scheme: light)">
+  </head>
+  <body data-plan-view-mode="overview">
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+
+    <main class="app-shell">
+      <aside class="activity-rail" aria-label="主导航">
+        <div class="rail-brand" role="img" aria-label="ThemeScheduler 标志" title="ThemeScheduler" data-theme-scheduler-brand></div>
+        <nav class="tab-bar" role="tablist" aria-label="工作区">
+          <button class="tab-button is-active" id="tab-plan" type="button" role="tab" aria-label="计划与外观" aria-selected="true" aria-controls="page-plan" data-page="plan">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5v5l3.4 2"></path></svg>
+            <span class="nav-tooltip" role="tooltip">计划与外观</span>
+          </button>
+          <button class="tab-button" id="tab-maintenance" type="button" role="tab" aria-label="维护" aria-selected="false" aria-controls="page-maintenance" data-page="maintenance">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M14.7 6.1a4.1 4.1 0 0 0-5.2 5.2l-5 5a1.8 1.8 0 0 0 2.5 2.5l5-5a4.1 4.1 0 0 0 5.2-5.2l-2.5 2.5-1.9-1.9 1.9-3.1Z"></path></svg>
+            <span class="nav-tooltip" role="tooltip">维护</span>
+          </button>
+          <button class="tab-button rail-debug-button" id="tab-debug" type="button" role="tab" aria-label="调试" aria-selected="false" aria-controls="page-debug" data-page="debug">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 8.5h6a3 3 0 0 1 3 3v3.5a6 6 0 0 1-12 0v-3.5a3 3 0 0 1 3-3Z"></path><path d="M9.5 8.5V6.8a2.5 2.5 0 0 1 5 0v1.7M6 12H3.8M20.2 12H18M6 16H3.8M20.2 16H18M9 12h6"></path></svg>
+            <span class="nav-tooltip" role="tooltip">调试</span>
+          </button>
+        </nav>
+        <button class="activity-button ui-theme-toggle" id="ui-theme-toggle" type="button" aria-label="切换界面主题" aria-pressed="false" title="当前跟随 Windows 默认应用模式">
+          <svg class="theme-toggle-icon" data-ui-theme-icon viewBox="0 0 24 24" aria-hidden="true">
+            <g data-theme-icon="light"><circle cx="12" cy="12" r="3.7"></circle><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M18.7 5.3l-1.4 1.4M6.7 17.3l-1.4 1.4"></path></g>
+            <g data-theme-icon="dark"><path d="M19.4 15.1A7.7 7.7 0 0 1 8.9 4.6 8.3 8.3 0 1 0 19.4 15.1Z"></path></g>
+          </svg>
+          <span class="nav-tooltip" data-ui-theme-label role="tooltip">切换界面主题</span>
+        </button>
+      </aside>
+
+      <div class="workspace-column">
+        <header class="hero">
+          <div>
+            <p class="eyebrow">THEMESCHEDULER</p>
+            <h1 id="workspace-title">计划概览</h1>
+            <p class="subtitle" id="workspace-subtitle">查看一天中的昼夜安排与当前运行状态。</p>
+            <p id="safety-note" class="safety-note">当前为安全预览，任务与主题写入已关闭。</p>
+          </div>
+          <div class="hero-actions">
+            <div id="health-pill" class="status-pill is-loading"><span class="status-dot"></span><span id="health-text">正在读取状态</span></div>
+          </div>
+        </header>
+
+        <section class="tab-page is-active" id="page-plan" role="tabpanel" aria-labelledby="tab-plan" data-page-panel="plan">
+          <section class="plan-view is-active" id="plan-overview-view" data-plan-view="overview">
+            <section class="initial-setup-banner" id="initial-setup-banner" aria-live="polite" hidden>
+              <span class="initial-setup-icon">1</span>
+              <div><h2>完成首次设置</h2><p>确认昼夜时间、应用模式和颜色后保存，计划才会启用；不会立即改变 Windows 外观。</p></div>
+              <button class="button button-primary" id="initial-setup-button" type="button">设置计划</button>
+            </section>
+
+            <div class="overview-layout">
+              <article class="overview-plan-card panel">
+                <header class="overview-card-heading">
+                  <div><p class="section-index">24 HOURS</p><h2>全天计划</h2></div>
+                  <div class="current-target"><span id="target-symbol">昼</span><span><small>当前目标</small><strong id="target-profile">—</strong></span></div>
+                </header>
+                <button class="overview-dial-button" id="expand-schedule-button" type="button" aria-label="放大全天计划" aria-haspopup="dialog" aria-controls="schedule-zoom-popover" popovertarget="schedule-zoom-popover" title="放大全天计划；也可双击表盘">
+                  <span id="schedule-summary-dial" class="summary-dial-host compact-summary-dial"></span>
+                </button>
+                <div class="overview-profile-stack" aria-label="昼夜计划">
+                  <article class="overview-profile-row day-profile-row">
+                    <span class="profile-period-icon day-shape" aria-hidden="true"></span>
+                    <span><small>昼间</small><strong id="day-summary-time">—</strong></span>
+                    <span class="profile-mode" id="overview-day-mode">—</span>
+                    <span class="profile-color"><i id="overview-day-swatch"></i><code id="overview-day-color">—</code></span>
+                  </article>
+                  <article class="overview-profile-row night-profile-row">
+                    <span class="profile-period-icon night-shape" aria-hidden="true"></span>
+                    <span><small>夜间</small><strong id="night-summary-time">—</strong></span>
+                    <span class="profile-mode" id="overview-night-mode">—</span>
+                    <span class="profile-color"><i id="overview-night-swatch"></i><code id="overview-night-color">—</code></span>
+                  </article>
+                </div>
+              </article>
+
+              <aside class="overview-change-column" aria-label="计划操作">
+                <button class="settings-entry-card" id="open-settings-button" type="button">
+                  <span class="settings-entry-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5a2 2 0 0 1 2 2v.4a7 7 0 0 1 1.4.8l.4-.2a2 2 0 0 1 2.7.7l.9 1.6a2 2 0 0 1-.7 2.7l-.4.2v1.6l.4.2a2 2 0 0 1 .7 2.7l-.9 1.6a2 2 0 0 1-2.7.7l-.4-.2a7 7 0 0 1-1.4.8v.4a2 2 0 0 1-2 2h-1.8a2 2 0 0 1-2-2v-.4a7 7 0 0 1-1.4-.8l-.4.2a2 2 0 0 1-2.7-.7L4 16.2a2 2 0 0 1 .7-2.7l.4-.2v-1.6l-.4-.2A2 2 0 0 1 4 8.8l.9-1.6a2 2 0 0 1 2.7-.7l.4.2a7 7 0 0 1 1.4-.8v-.4a2 2 0 0 1 2-2Z"></path><circle cx="12" cy="12.5" r="2.5"></circle></svg></span>
+                  <span><small>编辑时间、模式与颜色</small><strong>设置计划</strong></span><b>→</b>
+                </button>
+
+                <section class="overview-side-card current-appearance-card">
+                  <header><span>当前 Windows 外观</span><small id="current-appearance-state">读取中</small></header>
+                  <div class="current-appearance-value"><i id="current-appearance-swatch"></i><span><strong id="current-appearance-mode">—</strong><code id="current-appearance-color">—</code></span></div>
+                </section>
+
+                <section class="overview-side-card automation-card">
+                  <header><span>自动切换</span><small id="task-state">—</small></header>
+                  <button class="automation-toggle" id="automation-toggle-button" type="button" role="switch" aria-checked="false">
+                    <span class="toggle-track"><i></i></span><span><strong id="pause-state">—</strong><small id="last-result">尚未读取</small></span>
+                  </button>
+                  <p class="compact-status"><span id="task-detail">等待检查</span><span id="profile-state">—</span><span id="profile-detail">等待读取</span></p>
+                </section>
+
+                <button class="restore-overview-action" id="restore-install-button" type="button">
+                  <span><strong>恢复安装前外观</strong><small id="install-backup-state">恢复点读取中</small></span><b>↺</b>
+                </button>
+              </aside>
+            </div>
+          </section>
+
+          <section class="plan-view settings-view" id="plan-settings-view" data-plan-view="settings" hidden>
+            <header class="settings-page-heading">
+              <button class="button button-ghost back-to-overview" id="back-to-overview-button" type="button">← 返回概览</button>
+              <div><p class="section-index">PLAN SETTINGS</p><h2>设置昼夜计划</h2></div>
+              <button class="button button-ghost compact" id="refresh-button" type="button">重新读取</button>
+            </header>
+
+            <form class="settings-workbench" id="config-form" novalidate>
+              <section class="settings-dial-panel" data-dial-period="day">
+                <header class="dial-context">
+                  <span class="profile-period-icon day-shape" id="dial-context-icon" aria-hidden="true"></span>
+                  <span><small>正在编辑</small><strong id="dial-context-label">昼间开始</strong></span>
+                  <em id="dial-progress-text">拖动时针和分针后自动切换</em>
+                </header>
+                <div id="interactive-time-dial" class="interactive-dial-host"></div>
+                <div class="digital-time" aria-live="polite" aria-label="当前编辑时间">
+                  <button id="dial-hour-value" class="digital-part" type="button" aria-label="选择时针">06</button><span>:</span><button id="dial-minute-value" class="digital-part is-selected" type="button" aria-label="选择分针">15</button>
+                </div>
+                <div class="time-controls">
+                  <button class="binary-toggle meridiem-toggle" id="meridiem-toggle" type="button" role="switch" aria-checked="false" aria-label="当前为上午；点击切换至下午"><span>上午</span><span>下午</span><i aria-hidden="true"></i></button>
+                </div>
+              </section>
+
+              <section class="settings-detail-panel" id="appearance-settings" aria-label="昼夜设置明细">
+                <div class="boundary-tabs" role="tablist" aria-label="选择要编辑的时段">
+                  <button class="boundary-tab is-active" id="boundary-tab-day" type="button" role="tab" aria-selected="true" aria-controls="boundary-panel-day" tabindex="0" data-boundary-tab="day"><span class="profile-period-icon day-shape"></span><span><small>昼间开始</small><strong id="day-tab-time">—</strong></span></button>
+                  <button class="boundary-tab" id="boundary-tab-night" type="button" role="tab" aria-selected="false" aria-controls="boundary-panel-night" tabindex="-1" data-boundary-tab="night"><span class="profile-period-icon night-shape"></span><span><small>夜间开始</small><strong id="night-tab-time">—</strong></span></button>
+                </div>
+
+                <article class="boundary-detail is-active" id="boundary-panel-day" role="tabpanel" aria-labelledby="boundary-tab-day" data-boundary-panel="day" data-color-editor="day">
+                  <div class="detail-time-mode"><label>昼间开始<input id="day-start" type="time" step="300" required aria-describedby="time-editor-help"></label><div class="mode-setting"><span>应用模式</span><select class="visually-hidden" id="day-theme" aria-label="昼间应用模式" tabindex="-1"><option value="light">浅色</option><option value="dark">深色</option></select><button class="binary-toggle theme-mode-toggle" type="button" role="switch" aria-checked="false" data-theme-toggle="day" aria-label="昼间应用模式为浅色；点击切换至深色"><span>浅色</span><span>深色</span><i aria-hidden="true"></i></button></div></div>
+                  <p class="visually-hidden" id="time-editor-help">拖动时针或分针；分钟固定为 5 分钟步进。</p>
+                  <div class="appearance-card-body">
+                    <div class="color-preview-panel" data-color-preview role="img"></div>
+                    <div class="appearance-editor"><div class="color-value-grid">
+                      <label class="hex-field">HEX<span class="hex-input"><span class="hex-prefix" aria-hidden="true">#</span><input id="day-color-hex" data-color-hex type="text" inputmode="text" maxlength="7" autocomplete="off" spellcheck="false" placeholder="RRGGBB" aria-label="昼间颜色六位十六进制数"></span></label>
+                      <label>R<input id="day-color-red" data-color-channel="red" type="number" inputmode="numeric" min="0" max="255" step="1"></label><label>G<input id="day-color-green" data-color-channel="green" type="number" inputmode="numeric" min="0" max="255" step="1"></label><label>B<input id="day-color-blue" data-color-channel="blue" type="number" inputmode="numeric" min="0" max="255" step="1"></label>
+                    </div><button class="button button-secondary import-button is-safety-blocked" data-import-appearance="day" data-read-enabled="false" type="button" aria-disabled="true">导入当前 Windows 外观</button></div>
+                  </div>
+                  <p class="color-error" data-color-error role="alert"></p><p class="import-status" data-import-status="day" aria-live="polite" hidden></p>
+                </article>
+
+                <article class="boundary-detail" id="boundary-panel-night" role="tabpanel" aria-labelledby="boundary-tab-night" data-boundary-panel="night" data-color-editor="night" hidden>
+                  <div class="detail-time-mode"><label>夜间开始<input id="night-start" type="time" step="300" required aria-describedby="time-editor-help"></label><div class="mode-setting"><span>应用模式</span><select class="visually-hidden" id="night-theme" aria-label="夜间应用模式" tabindex="-1"><option value="dark">深色</option><option value="light">浅色</option></select><button class="binary-toggle theme-mode-toggle is-second" type="button" role="switch" aria-checked="true" data-theme-toggle="night" aria-label="夜间应用模式为深色；点击切换至浅色"><span>浅色</span><span>深色</span><i aria-hidden="true"></i></button></div></div>
+                  <div class="appearance-card-body">
+                    <div class="color-preview-panel" data-color-preview role="img"></div>
+                    <div class="appearance-editor"><div class="color-value-grid">
+                      <label class="hex-field">HEX<span class="hex-input"><span class="hex-prefix" aria-hidden="true">#</span><input id="night-color-hex" data-color-hex type="text" inputmode="text" maxlength="7" autocomplete="off" spellcheck="false" placeholder="RRGGBB" aria-label="夜间颜色六位十六进制数"></span></label>
+                      <label>R<input id="night-color-red" data-color-channel="red" type="number" inputmode="numeric" min="0" max="255" step="1"></label><label>G<input id="night-color-green" data-color-channel="green" type="number" inputmode="numeric" min="0" max="255" step="1"></label><label>B<input id="night-color-blue" data-color-channel="blue" type="number" inputmode="numeric" min="0" max="255" step="1"></label>
+                    </div><button class="button button-secondary import-button is-safety-blocked" data-import-appearance="night" data-read-enabled="false" type="button" aria-disabled="true">导入当前 Windows 外观</button></div>
+                  </div>
+                  <p class="color-error" data-color-error role="alert"></p><p class="import-status" data-import-status="night" aria-live="polite" hidden></p>
+                </article>
+
+                <div class="workspace-feedback"><p id="form-error" class="form-error" role="alert"></p><div class="workspace-result" id="workspace-result" aria-live="polite" hidden><div><span>配置与任务</span><strong id="workspace-save-result">尚未执行</strong></div></div></div>
+                <div class="settings-notifications"><label class="switch-label"><input id="notify-errors" type="checkbox"><span>错误通知</span></label><label class="switch-label"><input id="notify-status" type="checkbox"><span>状态变更通知</span></label><button class="button button-ghost compact" data-target="colors" type="button">Windows 颜色设置</button></div>
+                <p id="color-match-note" class="inline-note" hidden>昼间和夜间颜色相同；计划切换时只改变应用模式。</p>
+              </section>
+
+              <div class="settings-command-area">
+                <section class="command-bar" aria-label="保存计划"><div class="draft-summary"><span class="draft-dot"></span><span><small>配置草稿</small><strong id="draft-state" class="draft-state">与已保存配置一致</strong></span></div><div class="command-group run-actions" id="run-actions" hidden></div><button class="button button-primary" id="save-only-button" type="submit">保存</button></section>
+              </div>
+            </form>
+          </section>
+        </section>
+
+        <section class="tab-page" id="page-maintenance" role="tabpanel" aria-labelledby="tab-maintenance" data-page-panel="maintenance" hidden>
+          <section class="panel" id="maintenance">
+            <div class="panel-heading"><div><p class="section-index">维护</p><h2>任务与程序入口</h2><p class="hint" id="maintenance-health-summary">健康检查尚未运行</p></div></div>
+            <div class="maintenance-list two-columns">
+              <button class="list-action" id="reset-preferences-button" type="button"><span><strong>恢复默认时间与通知</strong><small>保留昼夜应用模式选择</small></span><b>→</b></button>
+              <button class="list-action" id="check-task-button" type="button"><span><strong>检查任务计划</strong><small>只读比较当前定义</small></span><b>→</b></button>
+              <button class="list-action" id="repair-task-button" type="button"><span><strong>修复任务计划</strong><small>按当前配置完整重建</small></span><b>→</b></button>
+              <button class="list-action" data-target="logs" type="button"><span><strong>打开日志目录</strong><small>查看结构化运行记录</small></span><b>↗</b></button>
+              <button class="list-action" data-target="data" type="button"><span><strong>打开数据目录</strong><small>配置、状态与颜色记录</small></span><b>↗</b></button>
+              <button class="list-action" id="uninstall-button" type="button"><span><strong>启动独立卸载器</strong><small>进入保留或清理选择</small></span><b>↗</b></button>
+            </div>
+          </section>
+        </section>
+
+        <section class="tab-page" id="page-debug" role="tabpanel" aria-labelledby="tab-debug" data-page-panel="debug" hidden>
+          <div class="debug-grid">
+            <section class="panel"><div class="panel-heading"><div><p class="section-index">只读诊断</p><h2>完整健康检查</h2></div><div class="diagnostic-actions"><button class="button button-secondary compact" id="check-health-button" type="button">运行检查</button><button class="button button-secondary compact" id="copy-diagnostic-button" type="button">复制摘要</button></div></div><pre class="health-report" id="health-report">尚未运行健康检查。</pre></section>
+            <section class="panel recent-log-panel"><div class="panel-heading"><div><p class="section-index">最近事件</p><h2>结构化日志摘要</h2></div></div><pre class="health-report" id="recent-log-report">尚未读取。</pre></section>
+          </div>
+          <details class="panel raw-details"><summary>高级修复：通知身份</summary><p class="hint">仅在通知点击、AUMID 或安全 URI 协议出现漂移时使用；执行前仍会单独确认。</p><button class="button button-secondary full-width" id="repair-identity-button" type="button">修复通知身份</button></details>
+          <details class="panel raw-details"><summary>查看任务定义</summary><pre class="health-report" id="task-report">尚未读取。</pre></details>
+          <details class="panel raw-details"><summary>查看状态与昼夜 profile</summary><pre class="health-report" id="state-profile-report">尚未读取。</pre></details>
+          <details class="panel raw-details"><summary>查看当前 overview 原始数据</summary><pre class="health-report" id="overview-report">尚未读取。</pre></details>
+        </section>
+
+        <footer><span id="data-root">数据目录：—</span><span>关闭窗口后程序不会驻留后台</span></footer>
+      </div>
+    </main>
+
+    <section class="schedule-zoom-popover" id="schedule-zoom-popover" popover="auto" role="dialog" aria-modal="false" aria-labelledby="schedule-zoom-title">
+      <header class="schedule-zoom-header"><div><p class="section-index">24 HOURS · 放大总览</p><h2 id="schedule-zoom-title">全天计划</h2></div><button class="icon-button" id="close-schedule-zoom-button" type="button" aria-label="缩小全天计划" popovertarget="schedule-zoom-popover" popovertargetaction="hide" title="缩小全天计划"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"></path></svg></button></header>
+      <div id="schedule-summary-dial-expanded" class="summary-dial-host expanded-summary-dial" title="双击缩小全天计划"></div>
+      <div class="schedule-legend zoom-legend" aria-label="放大计划图例"><div><span class="legend-line day-line"><i></i></span><strong>昼间</strong><small id="day-summary-time-expanded">—</small></div><div><span class="legend-line night-line"><i></i></span><strong>夜间</strong><small id="night-summary-time-expanded">—</small></div></div>
+      <p class="hint centered">悬浮环段或指针查看详情，双击表盘或按 Esc 缩回。</p>
+    </section>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="../js/brand.js"></script>
+    <script src="../js/api_contracts.js"></script>
+    <script src="../js/time_math.js"></script>
+    <script src="../js/time_dial.js"></script>
+    <script src="../js/color_fields.js"></script>
+    <script src="../js/workbench.js"></script>
+  </body>
+</html>

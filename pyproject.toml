@@ -1,0 +1,91 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "theme-scheduler"
+version = "0.1.2"
+description = "Windows 11 day/night application theme and accent scheduler"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pywebview==6.2.1",
+]
+
+[dependency-groups]
+build = [
+    "fonttools>=4.64.0",
+    "pyinstaller==6.20.0",
+]
+quality = [
+    "coverage==7.15.3",
+    "pyright==1.1.411",
+    "ruff==0.15.20",
+]
+
+[tool.uv]
+default-groups = ["build", "quality"]
+
+[project.scripts]
+themescheduler-preview = "theme_scheduler.cli.preview:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pyright]
+include = ["src/theme_scheduler"]
+venvPath = "."
+venv = ".venv"
+strict = [
+    "src/theme_scheduler/scheduler/models.py",
+    "src/theme_scheduler/lifecycle/installation.py",
+    "src/theme_scheduler/automation/runner.py",
+    "src/theme_scheduler/automation/recovery.py",
+    "src/theme_scheduler/automation/contracts.py",
+    "src/theme_scheduler/automation/outcome.py",
+    "src/theme_scheduler/accent_theme.py",
+]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+reportMissingImports = "error"
+reportMissingTypeStubs = "none"
+reportUnnecessaryTypeIgnoreComment = "warning"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+extend-exclude = ["artifacts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "C4", "SIM", "B"]
+ignore = [
+    "E501",   # The formatter owns physical line wrapping.
+    "SIM105", # Best-effort logging/cleanup must not mask the primary result.
+    "UP042",  # StrEnum changes str(member) and needs a dedicated migration.
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = ["E402"]
+"tests/test_system_integration_windows.py" = ["N802"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "lf"
+docstring-code-format = false
+
+[tool.coverage.run]
+branch = true
+source = ["theme_scheduler"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+precision = 1
+
+[tool.coverage.json]
+output = "artifacts/quality/coverage.json"
