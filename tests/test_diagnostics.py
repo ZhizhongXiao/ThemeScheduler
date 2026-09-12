@@ -1,21 +1,14 @@
 from __future__ import annotations
 
-import json
-import tempfile
 import unittest
-from copy import deepcopy
-from pathlib import Path
+from unittest.mock import patch
 
 from theme_scheduler.diagnostics import (
-    InvalidSnapshotError,
     RegistryKeySpec,
-    capture_registry_snapshot,
-    diff_registry_snapshots,
+    collect_environment,
     encode_registry_data,
+    read_registry_key,
 )
-from theme_scheduler.persistence import atomic_write_json, load_json
-
-FIXTURES = Path(__file__).parent / "fixtures"
 
 
 class RegistryEncodingTests(unittest.TestCase):
@@ -29,109 +22,114 @@ class RegistryEncodingTests(unittest.TestCase):
         self.assertEqual(encode_registry_data(("a", "b")), ["a", "b"])
 
 
-class SnapshotCaptureTests(unittest.TestCase):
-    def test_capture_uses_injected_read_only_reader(self) -> None:
+class EnvironmentCollectionTests(unittest.TestCase):
+    def test_non_windows_environment_does_not_invoke_registry_reader(self) -> None:
+        def reader(_spec: RegistryKeySpec) -> dict[str, object]:
+            self.fail("registry reader must not run outside Windows")
+
+        with patch("theme_scheduler.diagnostics.os.name", "posix"):
+            result = collect_environment(reader)
+
+        self.assertEqual(result["kind"], "themescheduler.environment")
+        self.assertEqual(result["schemaVersion"], 1)
+        self.assertEqual(
+            result["windowsRelease"],
+            {"available": False, "reason": "not-windows"},
+        )
+
+    def test_windows_release_uses_injected_read_only_reader(self) -> None:
         calls: list[RegistryKeySpec] = []
 
         def reader(spec: RegistryKeySpec) -> dict[str, object]:
             calls.append(spec)
             return {
-                "root": spec.root,
-                "path": spec.path,
-                "purpose": spec.purpose,
                 "exists": True,
-                "values": [],
+                "values": [
+                    {"name": "ProductName", "data": "Windows Test"},
+                    {"name": "DisplayVersion", "data": "25H2"},
+                    {"name": "Ignored", "data": "not exported"},
+                ],
             }
 
+        with patch("theme_scheduler.diagnostics.os.name", "nt"):
+            result = collect_environment(reader)
+
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0].root, "HKEY_LOCAL_MACHINE")
+        self.assertEqual(result["windowsRelease"]["ProductName"], "Windows Test")
+        self.assertNotIn("Ignored", result["windowsRelease"])
+
+
+class _RegistryKey:
+    def __enter__(self) -> _RegistryKey:
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        return None
+
+
+class _Winreg:
+    HKEY_CURRENT_USER = object()
+    HKEY_LOCAL_MACHINE = object()
+    KEY_READ = 1
+    REG_SZ = 1
+    REG_BINARY = 3
+    REG_DWORD = 4
+
+    def __init__(self, values: list[tuple[str, object, int]]) -> None:
+        self.values = values
+        self.open_error: OSError | None = None
+
+    def OpenKey(self, *_args: object) -> _RegistryKey:  # noqa: N802
+        if self.open_error:
+            raise self.open_error
+        return _RegistryKey()
+
+    def QueryInfoKey(self, _key: _RegistryKey) -> tuple[int, int, int]:  # noqa: N802
+        return 0, len(self.values), 0
+
+    def EnumValue(  # noqa: N802
+        self, _key: _RegistryKey, index: int
+    ) -> tuple[str, object, int]:
+        return self.values[index]
+
+
+class RegistryReadTests(unittest.TestCase):
+    def test_reads_and_sorts_values_with_type_names(self) -> None:
+        backend = _Winreg(
+            [
+                ("Zulu", b"\x01", 3),
+                ("Alpha", 1, 4),
+            ]
+        )
         spec = RegistryKeySpec("HKEY_CURRENT_USER", r"Software\Example", "test")
-        snapshot = capture_registry_snapshot((spec,), reader)
+        with patch("theme_scheduler.diagnostics._winreg_module", return_value=backend):
+            result = read_registry_key(spec)
+        self.assertTrue(result["exists"])
+        self.assertEqual([item["name"] for item in result["values"]], ["Alpha", "Zulu"])
+        self.assertEqual(result["values"][1]["typeName"], "REG_BINARY")
 
-        self.assertEqual(snapshot["kind"], "themescheduler.registry-baseline")
-        self.assertEqual(snapshot["keys"][0]["path"], r"Software\Example")
-        self.assertIn(spec, calls)
+    def test_missing_and_access_error_are_reported_without_mutation(self) -> None:
+        spec = RegistryKeySpec("HKEY_LOCAL_MACHINE", r"Software\Example", "test")
+        missing = _Winreg([])
+        missing.open_error = FileNotFoundError("missing")
+        with patch("theme_scheduler.diagnostics._winreg_module", return_value=missing):
+            self.assertFalse(read_registry_key(spec)["exists"])
+        denied = _Winreg([])
+        denied.open_error = PermissionError("denied")
+        with patch("theme_scheduler.diagnostics._winreg_module", return_value=denied):
+            result = read_registry_key(spec)
+        self.assertIn("PermissionError", result["error"])
 
-
-class SnapshotDiffTests(unittest.TestCase):
-    def test_fixture_diff_reports_added_and_changed_values(self) -> None:
-        before = load_json(FIXTURES / "registry_before.json")
-        after = load_json(FIXTURES / "registry_after.json")
-
-        result = diff_registry_snapshots(before, after)
-
-        self.assertEqual(result["changeCount"], 2)
-        self.assertEqual(
-            [change["change"] for change in result["changes"]],
-            ["value-changed", "value-added"],
-        )
-        self.assertEqual(
-            [change["name"] for change in result["changes"]],
-            ["AppsUseLightTheme", "SystemUsesLightTheme"],
-        )
-
-    def test_identical_snapshot_has_no_changes(self) -> None:
-        snapshot = load_json(FIXTURES / "registry_before.json")
-        result = diff_registry_snapshots(snapshot, snapshot)
-        self.assertEqual(result["changeCount"], 0)
-        self.assertEqual(result["changes"], [])
-
-    def test_removed_value_is_reported(self) -> None:
-        before = load_json(FIXTURES / "registry_before.json")
-        after = deepcopy(before)
-        after["keys"][0]["values"] = [after["keys"][0]["values"][0]]
-
-        result = diff_registry_snapshots(before, after)
-
-        self.assertEqual(result["changeCount"], 1)
-        self.assertEqual(result["changes"][0]["change"], "value-removed")
-        self.assertEqual(result["changes"][0]["name"], "Palette")
-
-    def test_added_and_removed_keys_are_reported(self) -> None:
-        populated = load_json(FIXTURES / "registry_before.json")
-        empty = deepcopy(populated)
-        empty["keys"] = []
-
-        removed = diff_registry_snapshots(populated, empty)
-        added = diff_registry_snapshots(empty, populated)
-
-        self.assertEqual(removed["changes"][0]["change"], "key-removed")
-        self.assertEqual(added["changes"][0]["change"], "key-added")
-
-    def test_registry_read_error_change_is_reported(self) -> None:
-        before = load_json(FIXTURES / "registry_before.json")
-        after = deepcopy(before)
-        before["keys"][0]["error"] = "PermissionError: denied"
-
-        result = diff_registry_snapshots(before, after)
-
-        self.assertEqual(result["changeCount"], 1)
-        self.assertEqual(result["changes"][0]["change"], "key-read-status-changed")
-
-    def test_unknown_schema_is_rejected(self) -> None:
-        snapshot = load_json(FIXTURES / "registry_before.json")
-        snapshot["schemaVersion"] = 99
-        with self.assertRaises(InvalidSnapshotError):
-            diff_registry_snapshots(snapshot, snapshot)
-
-
-class JsonFileTests(unittest.TestCase):
-    def test_atomic_write_round_trip_and_refuses_overwrite(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "nested" / "snapshot.json"
-            payload = {"schemaVersion": 1, "value": "测试"}
-
-            atomic_write_json(path, payload)
-            self.assertEqual(load_json(path), payload)
-            with self.assertRaises(FileExistsError):
-                atomic_write_json(path, {"schemaVersion": 2})
-
-    def test_atomic_write_force_replaces_existing_file(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "snapshot.json"
-            atomic_write_json(path, {"value": "before"})
-            atomic_write_json(path, {"value": "after"}, force=True)
-
-            with path.open("r", encoding="utf-8") as handle:
-                self.assertEqual(json.load(handle), {"value": "after"})
+    def test_unknown_root_is_rejected(self) -> None:
+        with (
+            patch(
+                "theme_scheduler.diagnostics._winreg_module",
+                return_value=_Winreg([]),
+            ),
+            self.assertRaisesRegex(ValueError, "Unsupported registry root"),
+        ):
+            read_registry_key(RegistryKeySpec("HKCR", "Example", "test"))
 
 
 if __name__ == "__main__":

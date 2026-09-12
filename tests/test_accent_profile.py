@@ -18,9 +18,9 @@ from theme_scheduler.accent_service import (
     rollback_accent_transaction,
 )
 from theme_scheduler.accent_theme import LiveThemeApplyError
+from theme_scheduler.appearance import ThemeMode
 from theme_scheduler.backup import InstallBackup
 from theme_scheduler.storage import UserDataLayout
-from theme_scheduler.theme import ThemeMode
 
 
 def _theme_bytes(color: str = "0XC4FFB900", *, auto: str = "0") -> bytes:

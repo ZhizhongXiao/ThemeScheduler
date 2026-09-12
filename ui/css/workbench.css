@@ -1077,24 +1077,35 @@ footer {
 
 .toast {
   position: fixed;
-  right: 24px;
-  bottom: 24px;
-  z-index: 20;
+  right: 32px;
+  bottom: 32px;
+  z-index: 30;
   max-width: min(420px, calc(100vw - 48px));
   padding: 13px 16px;
   border: 1px solid var(--line);
+  border-left: 4px solid var(--green);
   border-radius: 12px;
   background: #44475a;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
   color: #f8f8f2;
-  font-size: 12px;
+  font-size: 15px;
   opacity: 0;
   transform: translateY(12px);
   pointer-events: none;
   transition: 180ms ease;
 }
+.toast-message { display: block; }
+.toast-message {
+  color: #f8f8f2;
+  font-size: 15px;
+  font-weight: 680;
+  line-height: 1.55;
+}
 .toast.is-visible { opacity: 1; transform: translateY(0); }
-.toast.is-error { border-color: rgba(var(--red-rgb), 0.55); }
+.toast.is-error {
+  border-color: rgba(var(--red-rgb), 0.55);
+  border-left-color: var(--red);
+}
 .toast.is-centered {
   right: auto;
   bottom: auto;
@@ -1107,6 +1118,60 @@ footer {
   transition: opacity 140ms ease;
 }
 .toast.is-centered.is-visible { transform: translate(-50%, -50%) scale(1); }
+
+.confirmation-dialog {
+  position: fixed;
+  inset: 0;
+  width: min(460px, calc(100vw - 48px));
+  max-width: none;
+  max-height: calc(100vh - 48px);
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface-elevated);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.42);
+  color: var(--text);
+}
+.confirmation-dialog::backdrop {
+  background: rgba(10, 12, 20, 0.46);
+  backdrop-filter: blur(3px);
+}
+.confirmation-dialog[open] { animation: confirmation-in 150ms ease-out; }
+.confirmation-card {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 14px 16px;
+  padding: 24px;
+}
+.confirmation-mark {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(var(--purple-rgb), 0.18);
+  color: var(--purple-bright);
+  font-size: 22px;
+  font-weight: 760;
+}
+.confirmation-copy h2 { margin: 3px 0 8px; font-size: 20px; }
+.confirmation-copy p:last-child {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.65;
+}
+.confirmation-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+@keyframes confirmation-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
 
 /* Light-theme overrides live in workbench-light.css. */
 

@@ -37,6 +37,7 @@ FINAL_RELEASES = {
     "artifacts/releases/0.1.0": "Complete published 0.1.0 release.",
     "artifacts/releases/0.1.1": "Complete accepted 0.1.1 release.",
     "artifacts/releases/0.1.2": "Complete accepted 0.1.2 release.",
+    "artifacts/releases/0.1.3": "Complete accepted 0.1.3 release.",
 }
 FINAL_RELEASE_REPORTS = {
     "artifacts/test-reports/20260727T000308-release.json",

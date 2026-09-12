@@ -143,11 +143,11 @@ ThemeScheduler/
 │  ├─ runtime_retention.py
 │  ├─ execution_lock.py
 │  ├─ auto_transaction.py
-│  ├─ theme.py
-│  ├─ accent.py
+│  ├─ appearance.py
 │  ├─ accent_profile.py
 │  ├─ accent_service.py
 │  ├─ accent_theme.py
+│  ├─ manual_appearance_service.py
 │  ├─ storage.py
 │  ├─ initial_setup.py
 │  ├─ explorer_recovery.py
@@ -164,7 +164,6 @@ ThemeScheduler/
 │  │  ├─ preview.py
 │  │  ├─ scheduler.py
 │  │  ├─ system_integration.py
-│  │  ├─ theme.py
 │  │  └─ uninstall.py
 │  ├─ scheduler/
 │  │  ├─ __init__.py
@@ -305,11 +304,11 @@ ThemeScheduler/
 | `backup.py` | 首次安装恢复点清单的严格结构和不可覆盖边界 |
 | `log_policy.py` | v2 结构化日志、v1 兼容读取、验证/回滚状态、隐私边界、轮换和运行事务保留参数 |
 | `runtime_retention.py` | 生成可检查的运行事务清理计划，并只删除受控目录内的明确目标 |
-| `theme.py` | 默认应用模式的读取、写入、验证和失败回滚；不得写入 Windows 系统模式 |
-| `accent.py` | 经典强调色字段的历史原型和诊断分析；六字段不作为正式恢复源 |
+| `appearance.py` | 应用模式与语义强调色的正式只读模型；为备份和状态识别提供最小注册表读取，不提供直接写入 |
 | `accent_profile.py` | 最小语义强调色配置的结构版本、严格校验和主题捕获转换 |
 | `accent_service.py` | 强调色捕获、应用模式与强调色的复合主题事务、运行清单和结果汇总 |
 | `accent_theme.py` | 动态主题副本、可选目标 `AppMode`、具名 V2 应用结果、视觉失败列表、`IThemeManager2` 索引回退及完整主题备份兜底；不再暴露 V1 Apply |
+| `manual_appearance_service.py` | 以独立手动意图运行当前时段外观事务；允许暂停时显式应用，不学习离开时段且不改变暂停状态 |
 | `storage.py` | `profiles/`、`runtime/`、`backup/`、`logs/` 用途目录和路径约束 |
 | `explorer_recovery.py` | 当前会话 Explorer 显式故障恢复适配器；不得进入自动链路 |
 | `cli/data.py` | 阶段 3 离线初始化、严格验证和日志冒烟入口；不得修改 Windows |
@@ -340,8 +339,7 @@ ThemeScheduler/
 | `notification_identity_service.py` | 显式修复开始菜单快捷方式、已有桌面快捷方式及安全 URI 协议；失败时按原始字节和注册表树回滚 |
 | `health_contracts.py` | 健康检查四级状态、稳定检查 ID 和显式修复动作 |
 | `health_service.py` | 11 项配置、数据、载荷、权限、任务、Windows 与通知能力检查；除一次性权限探针外只检不修 |
-| `diagnostics.py` | 原型阶段的只读环境记录、候选注册表快照和离线差异比较 |
-| `cli/theme.py` | 阶段 1 的受保护原型入口；真实写入要求显式确认和测试前备份 |
+| `diagnostics.py` | 只读运行环境与 Windows 版本信息；不再包含主题注册表快照或离线差异原型 |
 | `cli/app.py` | 正式安装态统一入口；延迟分派无参数 GUI、`auto` 和 `maintenance`，自动分支不得导入 GUI |
 | `cli/gui.py` | 当前无包内调用者的源码态开发/验收启动入口；支持显式数据根、只读系统导入和受控实机写入，不属于正式安装态主路由 |
 | `resources.py` | 源码树与 PyInstaller `_MEIPASS` 的统一只读资源定位 |
@@ -474,7 +472,7 @@ GUI 输入
 
 ```
 
-恢复只解除暂停，不调用自动核心。计划任务在暂停期间保持启用，因此暂停不引入任务定义漂移。产品不提供手动立即套用外观的入口；临时外观调整交给 Windows 设置。完整契约见 [CONTROLS.md](CONTROLS.md)。
+恢复只解除暂停，不调用自动核心。计划任务在暂停期间保持启用，因此暂停不引入任务定义漂移。概览页不提供通用立即同步；设置页允许在计划成功保存后显式应用当前时段。完整契约见 [CONTROLS.md](CONTROLS.md)。
 
 ### 7.4 安装、升级与卸载
 
@@ -495,13 +493,13 @@ Setup 在导入 pywebview 前以原生能力检查 WebView2，并先验证内置
 | `backup/install.json`、`backup/install.theme` | 安装/卸载组件 | 安装前应用模式、语义强调色和保留身份/系统模式的规范化主题恢复副本 | 首次安装生成，卸载恢复时使用 |
 | `logs/events.jsonl` | 日志组件 | 固定字段的 JSON Lines 事件 | 1 MiB 轮换，保留 5 个历史文件 |
 
-所有持久化 JSON 都应包含 `kind` 和结构版本，并拒绝未知字段及未知版本；写入采用临时文件、刷盘和同目录替换的原子流程。主题文件先写入并刷盘，引用它的清单最后提交，清单保存 SHA-256。敏感运行中断不得把半写文件认作有效数据。通用读写只由 `persistence.py` 提供，`diagnostics.py` 不再拥有正式持久化职责。强调色数据由 `accent_profile.py`、`accent_service.py` 与 `accent_theme.py` 共同管理，`accent.py` 只保留历史诊断原型；其他组件只能通过公开用例访问。
+所有持久化 JSON 都应包含 `kind` 和结构版本，并拒绝未知字段及未知版本；写入采用临时文件、刷盘和同目录替换的原子流程。主题文件先写入并刷盘，引用它的清单最后提交，清单保存 SHA-256。敏感运行中断不得把半写文件认作有效数据。通用读写只由 `persistence.py` 提供，`diagnostics.py` 不再拥有正式持久化职责。强调色数据由 `accent_profile.py`、`accent_service.py` 与 `accent_theme.py` 共同管理；经典六字段历史诊断原型已删除，其他组件只能通过公开用例访问。
 
 ## 9. 外部集成边界
 
 ### 9.1 Windows 注册表与 Shell
 
-应用模式和强调色操作仅面向当前用户的个性化设置。阶段 1 独立能力只允许写 `AppsUseLightTheme`；阶段 4 正式自动路径在管理主题中组合目标 `AppMode` 与语义强调色。`SystemUsesLightTheme` 和管理主题 `SystemMode` 只用于只读诊断及“不变”断言，不得由自动切换、恢复或卸载流程改变。经典六个颜色注册表字段、两个 `ColorPrevalence` 和稳定主题索引均已证明不能代表可见 Shell 状态，只保留为诊断数据。
+应用模式和强调色操作仅面向当前用户的个性化设置。正式自动与显式手动应用路径都在管理主题中组合目标 `AppMode` 与语义强调色。`SystemUsesLightTheme` 和管理主题 `SystemMode` 只用于只读诊断及“不变”断言，不得由自动切换、恢复或卸载流程改变。阶段 1 直接注册表写入与经典六颜色字段原型均已退役；它们不是运行时兜底。
 
 强调色主路径在隔离的 Windows PowerShell/.NET 进程中调用未公开的 `IThemeManager2.AddAndSelectTheme`。桥接只暴露 `CurrentV2`、`ApplyV2` 和 `SetV2`，已退役无正式调用方的 V1 Apply 与 Probe 动作。调用使用忽略背景、光标、桌面图标、声音和屏保的应用标志，主进程设置超时并记录调用前主题索引；失败时优先通过 `SetCurrentTheme` 回到原索引并验证视觉状态，未恢复时再应用完整主题备份。程序每次从当前活动主题创建产品管理副本；阶段 2 独立入口只修改主题元数据、`AutoColorization` 和 `ColorizationColor`，阶段 4 自动入口还可设置目标 `AppMode`，但两者都必须保持 `SystemMode` 且不得原地覆盖用户主题。
 

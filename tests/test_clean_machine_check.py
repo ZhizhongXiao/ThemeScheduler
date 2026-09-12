@@ -53,6 +53,11 @@ class CleanMachineCheckTests(unittest.TestCase):
         self.assertIn("三按钮通知", text)
         self.assertIn("恢复安装前外观", text)
 
+    def test_script_defaults_to_current_release_version(self) -> None:
+        source = SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('[string]$ExpectedVersion = "0.1.3"', source)
+
     def test_script_requires_release_hash_instead_of_freezing_an_old_one(self) -> None:
         source = SCRIPT.read_text(encoding="utf-8")
 

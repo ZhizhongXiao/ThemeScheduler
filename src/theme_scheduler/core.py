@@ -85,6 +85,13 @@ class AutoPlanKind(str, Enum):
     APPLY = "apply"
 
 
+class RunIntent(str, Enum):
+    """Distinguish scheduled decisions from an explicit user application."""
+
+    AUTOMATIC = "automatic"
+    MANUAL_CURRENT = "manual-current"
+
+
 @dataclass(frozen=True)
 class AutoRunPlan:
     """Side-effect-free plan produced only from trusted configuration/state."""
@@ -160,20 +167,20 @@ def plan_auto_run(
     state: AppState,
     now: datetime,
     *,
-    force_apply: bool = False,
+    intent: RunIntent = RunIntent.AUTOMATIC,
 ) -> AutoRunPlan:
     """Build a plan without touching files, Windows, logs, or runtime folders."""
 
-    if not isinstance(force_apply, bool):
-        raise ValueError("forceApply must be boolean.")
-    if state.paused:
+    if not isinstance(intent, RunIntent):
+        raise ValueError("intent must be a RunIntent.")
+    if state.paused and intent is RunIntent.AUTOMATIC:
         return AutoRunPlan(AutoPlanKind.PAUSED, None, None, None)
     target = target_profile_at(config, now)
     apps_theme = (
         config.day_apps_theme if target == PROFILE_DAY else config.night_apps_theme
     )
     if (
-        not force_apply
+        intent is RunIntent.AUTOMATIC
         and state.last_result == "success"
         and state.active_profile == target
     ):
@@ -187,7 +194,7 @@ def plan_auto_run(
         AutoPlanKind.APPLY,
         target,
         apps_theme,
-        learning_source(state, target),
+        (learning_source(state, target) if intent is RunIntent.AUTOMATIC else None),
     )
 
 

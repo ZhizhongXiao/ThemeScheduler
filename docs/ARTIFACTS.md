@@ -17,10 +17,10 @@
 
 ## 当前正式发布
 
-`0.1.2` 位于 `artifacts/releases/0.1.2`，目录必须整体保留：
+`0.1.3` 位于 `artifacts/releases/0.1.3`，目录必须整体保留：
 
 ```text
-0.1.2/
+0.1.3/
 ├─ dist/                    # Setup、用户说明和公开 SHA-256
 ├─ evidence/                # 源码、质量、构建、PE 与 payload 证据
 ├─ release-layout.json

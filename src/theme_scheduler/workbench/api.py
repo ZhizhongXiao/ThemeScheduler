@@ -15,6 +15,7 @@ from .contracts import (
     IdentityRepairServiceFactory,
     LockFactory,
     MaintenanceServiceFactory,
+    ManualAppearanceServiceFactory,
 )
 from .maintenance import GuiMaintenanceMixin
 from .overview import GuiOverviewMixin
@@ -53,6 +54,9 @@ class GuiApi(
         maintenance_service_factory: MaintenanceServiceFactory | None = None,
         health_service_factory: HealthServiceFactory | None = None,
         identity_repair_service_factory: (IdentityRepairServiceFactory | None) = None,
+        manual_appearance_service_factory: (
+            ManualAppearanceServiceFactory | None
+        ) = None,
         current_appearance_reader: CurrentAppearanceReader | None = None,
         shell_actions: ShellActions | None = None,
         clock: Clock | None = None,
@@ -65,6 +69,7 @@ class GuiApi(
         self._maintenance_service_factory = maintenance_service_factory
         self._health_service_factory = health_service_factory
         self._identity_repair_service_factory = identity_repair_service_factory
+        self._manual_appearance_service_factory = manual_appearance_service_factory
         self._current_appearance_reader = current_appearance_reader
         self._shell = shell_actions or ShellActions(
             layout,

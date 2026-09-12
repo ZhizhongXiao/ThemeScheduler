@@ -14,6 +14,7 @@ from theme_scheduler.accent_profile import (
     AccentProfileStore,
 )
 from theme_scheduler.accent_theme import read_visual_state
+from theme_scheduler.appearance import RegistryValue
 from theme_scheduler.backup import (
     InstallBackup,
     InstallBackupStore,
@@ -50,7 +51,6 @@ from theme_scheduler.state import (
     load_trusted_state,
 )
 from theme_scheduler.storage import UserDataLayout
-from theme_scheduler.theme import RegistryValue
 
 
 class ConfigContractTests(unittest.TestCase):

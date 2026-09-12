@@ -93,6 +93,10 @@
       validateWorkspace,
     ),
     saveWorkspace: operation("save_workspace", "save-workspace"),
+    saveWorkspaceAndApply: operation(
+      "save_workspace_and_apply",
+      ["save-workspace-and-apply", "save-workspace"],
+    ),
     setPaused: operation("set_paused", ["pause", "resume", "set-paused"]),
     checkTask: operation("check_task", "check-task"),
     checkHealth: operation("check_health", "check-health", validateHealth),

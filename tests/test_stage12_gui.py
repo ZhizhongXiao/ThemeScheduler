@@ -393,14 +393,16 @@ class Stage12FrontendContractTests(unittest.TestCase):
             self.assertIn(f"window.pywebview.api.{action}", self.app)
         self.assertIn("window.themeSchedulerOpenHealth", self.app)
 
-    def test_workspace_save_has_no_manual_apply_companion(
+    def test_workspace_has_two_explicit_save_actions_without_sync_button(
         self,
     ) -> None:
         self.assertIn('id="save-only-button"', self.html)
         self.assertIn('id="workspace-save-result"', self.html)
-        self.assertNotIn('id="save-apply-button"', self.html)
+        self.assertIn('id="save-apply-button"', self.html)
+        self.assertIn("保存计划", self.html)
+        self.assertIn("保存并应用当前时段", self.html)
         self.assertNotIn('id="sync-button"', self.html)
-        self.assertNotIn("save_and_apply_workspace", self.app)
+        self.assertIn("save_workspace_and_apply", self.app)
         self.assertNotIn("sync_now", self.app)
         self.assertIn("renderWorkspaceResult(result)", self.app)
 
@@ -447,7 +449,7 @@ class Stage12FrontendContractTests(unittest.TestCase):
 
     def test_boundary_transition_toast_is_centered_and_short(self) -> None:
         self.assertIn("centered: true", self.app)
-        self.assertIn("duration: 1500", self.app)
+        self.assertIn("duration: 1100", self.app)
         self.assertIn("已切换至", self.app)
         self.assertIn("void toast.offsetWidth", self.app)
         self.assertIn("duration: 260", self.app)
@@ -476,6 +478,49 @@ class Stage12FrontendContractTests(unittest.TestCase):
         ]
         self.assertNotIn("dataRoot", summary_source)
         self.assertNotIn("executable", summary_source)
+
+    def test_mutating_identity_repair_is_conditional_maintenance_action(self) -> None:
+        maintenance = self.html[
+            self.html.index('id="page-maintenance"') : self.html.index(
+                'id="page-debug"'
+            )
+        ]
+        debug = self.html[self.html.index('id="page-debug"') :]
+        self.assertIn('id="repair-identity-button"', maintenance)
+        self.assertNotIn('id="repair-identity-button"', debug)
+        self.assertIn(
+            'check.repairAction === "notification.identity-repair"',
+            self.app,
+        )
+        self.assertIn("identityRepairButton.hidden = !identityCheck", self.app)
+
+    def test_deferred_interaction_contracts_have_stable_placeholders(self) -> None:
+        self.assertIn('data-interaction-contract="UI-013-01"', self.html)
+        self.assertIn('data-feedback-contract="UI-013-02"', self.html)
+
+    def test_confirmation_uses_centered_webview_dialog(self) -> None:
+        self.assertIn('id="confirmation-dialog"', self.html)
+        self.assertIn("requestConfirmation(", self.app)
+        self.assertIn("dialog.showModal()", self.app)
+        self.assertNotIn('!window.confirm("', self.app)
+        self.assertIn("inset: 0;", self.styles)
+        self.assertIn("margin: auto;", self.styles)
+
+    def test_toast_uses_weighted_centered_chinese_feedback(self) -> None:
+        self.assertIn('class="toast-message"', self.html)
+        self.assertIn("const FEEDBACK_LABELS", self.app)
+        self.assertIn("const IMPORTANT_FEEDBACK_ACTIONS", self.app)
+        self.assertIn("failed || IMPORTANT_FEEDBACK_ACTIONS.has(action)", self.app)
+        self.assertIn("options.centered !== false", self.app)
+        self.assertNotIn('class="toast-kind"', self.html)
+        self.assertIn("isError ? 2800 : 1200", self.app)
+        self.assertIn('toast.classList.remove("is-visible");', self.app)
+        self.assertNotIn(
+            'toast.classList.remove("is-visible", "is-centered")',
+            self.app,
+        )
+        self.assertNotIn("诊断摘要已复制；未包含完整路径或原始 JSON。", self.app)
+        self.assertNotIn('lang="en"', self.html)
 
     @unittest.skipUnless(shutil.which("node"), "Node.js is not installed")
     def test_time_math_deterministic_examples_in_javascript(self) -> None:

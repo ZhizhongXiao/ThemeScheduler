@@ -1,6 +1,6 @@
 # ThemeScheduler 自动切换核心契约
 
-状态：`0.1.2` 当前契约。
+状态：`0.1.3` 当前契约。
 
 本文定义时间决策、可信边界、单实例、复合主题事务、退出码和中断恢复语义。持久化结构以 [PERSISTENCE.md](PERSISTENCE.md) 为准，Windows 主题接口以 [DESIGN.md](DESIGN.md) 为准。
 
@@ -61,7 +61,7 @@
 
 `VisualStyles.SystemMode` 必须保持调用前原值。随后用隔离的 `IThemeManager2` 一次应用并同时验证应用模式、强调色、Windows 模式和主题管理器转换。完整 `before.theme` 是该复合事务的回滚依据。
 
-阶段 1 的 `theme.py` 仍保留为单独验证和维护能力；`auto` 不应把它与强调色服务串成两个不可统一回滚的 Windows 写入。
+阶段 1 的直接注册表写入原型已经退役，不作为维护或回滚兜底。自动与显式手动应用都使用同一复合主题事务，回滚依次尝试恢复原主题索引和完整主题备份。
 
 ## 5. 状态提交与失败分级
 
@@ -130,7 +130,7 @@ Local\ThemeScheduler.Auto.<data-root-hash>
 
 `accent_theme.py` 和 `accent_service.py` 已兼容可选目标应用模式；省略该参数时保持阶段 2 的“应用模式不变”行为。
 
-阶段 6 曾以 `force_apply=true` 和日志来源 `manual` 验证“立即同步”。阶段 13 已删除全部正式产品入口；`force_apply` 只作为自动核心的测试缝与受控诊断能力保留。计划任务始终使用 `force_apply=false`，用户可见切换只由固定或延迟边界驱动。
+自动运行使用 `RunIntent.AUTOMATIC`，遵守暂停和无变化判定。设置页的“保存并应用当前时段”在计划提交成功后，通过独立 `ManualAppearanceService` 使用 `RunIntent.MANUAL_CURRENT`；它允许暂停时显式应用、不会解除暂停，也不会学习离开时段。旧 `force_apply` 入口已删除。
 
 正式实现还包括：
 

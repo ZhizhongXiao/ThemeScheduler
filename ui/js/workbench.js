@@ -22,6 +22,8 @@ const state = {
   adjustedHands: new Set(),
   currentAppearance: null,
   toastTimer: null,
+  confirmationResolver: null,
+  confirmationReturnFocus: null,
   interactiveDial: null,
   summaryDial: null,
   expandedSummaryDial: null,
@@ -30,6 +32,32 @@ const state = {
   systemThemeQuery: null,
   lightThemeStylesheet: null,
 };
+
+const FEEDBACK_LABELS = Object.freeze({
+  overview: "状态已刷新",
+  saveWorkspace: "计划已保存",
+  saveWorkspaceAndApply: "计划已保存并已应用当前时段外观",
+  setPaused: "自动切换状态已更新",
+  checkTask: "任务检查完成",
+  checkHealth: "健康检查完成",
+  repairNotificationIdentity: "通知身份修复完成",
+  repairTask: "任务计划修复完成",
+  resetPreferences: "默认时间和通知设置已恢复",
+  restoreInstallAppearance: "已恢复安装前外观",
+  launchUninstaller: "已启动独立卸载器",
+  openTarget: "已打开 Windows 目标位置",
+  readCurrentWindowsAppearance: "已读取当前 Windows 外观",
+});
+
+const IMPORTANT_FEEDBACK_ACTIONS = new Set([
+  "saveWorkspace",
+  "saveWorkspaceAndApply",
+  "setPaused",
+  "repairNotificationIdentity",
+  "repairTask",
+  "resetPreferences",
+  "restoreInstallAppearance",
+]);
 
 const LIGHT_THEME_MEDIA = "(prefers-color-scheme: light)";
 
@@ -139,19 +167,56 @@ function workspaceIdentity(config, colors) {
 
 function showToast(message, isError = false, options = {}) {
   const toast = $("#toast");
-  const centered = options.centered === true;
-  const duration = options.duration ?? 4200;
+  const centered = options.centered !== false;
+  const duration = options.duration ?? (isError ? 2800 : 1200);
+  const rawMessage = String(message || "");
+  const containsChinese = /[\u3400-\u9fff]/u.test(rawMessage);
+  const localizedMessage = containsChinese
+    ? rawMessage
+    : options.localizedMessage
+      || FEEDBACK_LABELS[options.action]
+      || (isError ? "操作未完成" : "操作已完成");
+  const content = toast.querySelector(".toast-message");
   toast.classList.remove("is-visible");
-  toast.textContent = message;
+  content.textContent = localizedMessage;
   toast.classList.toggle("is-error", isError);
   toast.classList.toggle("is-centered", centered);
   void toast.offsetWidth;
   toast.classList.add("is-visible");
   clearTimeout(state.toastTimer);
   state.toastTimer = setTimeout(() => {
-    toast.classList.remove("is-visible", "is-centered");
+    toast.classList.remove("is-visible");
   }, duration);
 }
+
+function requestConfirmation(message, options = {}) {
+  const dialog = $("#confirmation-dialog");
+  if (!dialog || typeof dialog.showModal !== "function") {
+    return Promise.resolve(window.confirm(message));
+  }
+  if (dialog.open) return Promise.resolve(false);
+  clearTimeout(state.toastTimer);
+  $("#toast").classList.remove("is-visible");
+  setText("#confirmation-title", options.title || "确认继续？");
+  setText("#confirmation-message", message);
+  $("#confirmation-accept").textContent = options.acceptLabel || "确认";
+  state.confirmationReturnFocus = document.activeElement;
+  dialog.showModal();
+  $("#confirmation-cancel").focus();
+  return new Promise((resolve) => {
+    state.confirmationResolver = resolve;
+  });
+}
+
+$("#confirmation-dialog").addEventListener("close", (event) => {
+  const accepted = event.currentTarget.returnValue === "confirm";
+  const resolve = state.confirmationResolver;
+  const returnFocus = state.confirmationReturnFocus;
+  state.confirmationResolver = null;
+  state.confirmationReturnFocus = null;
+  resolve?.(accepted);
+  returnFocus?.focus?.();
+});
 
 function setBusy(busy) {
   state.busy = busy;
@@ -489,7 +554,10 @@ function renderOverview(data, options = {}) {
   );
   renderRecentLog(data.recentLog);
   if (!usable) {
-    showToast(data.message || "状态读取失败", true);
+    showToast(data.message || "状态读取失败", true, {
+      action: "overview",
+      duration: 2800,
+    });
     return;
   }
 
@@ -579,10 +647,18 @@ async function callApi(action, work, successMessage) {
   try {
     const result = apiContracts.validate(action, await work());
     const failed = !["success", "changed", "no-change", "applied", "restored"].includes(result.result);
-    showToast(result.message || successMessage || result.result, failed);
+    if (failed || IMPORTANT_FEEDBACK_ACTIONS.has(action)) {
+      showToast(result.message || successMessage || result.result, failed, {
+        action,
+        duration: failed ? 2800 : 1200,
+        localizedMessage: failed
+          ? (FEEDBACK_LABELS[action] || "操作") + "未完成"
+          : successMessage || FEEDBACK_LABELS[action],
+      });
+    }
     return result;
   } catch (error) {
-    showToast(String(error), true);
+    showToast(String(error), true, { action, duration: 2800 });
     return null;
   } finally {
     setBusy(false);
@@ -624,6 +700,14 @@ async function runHealthInspection() {
     "#maintenance-health-summary",
     `只读健康检查：${healthStatusLabels[result.status] || result.status}`,
   );
+  const identityCheck = result.checks.find(
+    (check) => check.repairAction === "notification.identity-repair",
+  );
+  const identityRepairButton = $("#repair-identity-button");
+  identityRepairButton.hidden = !identityCheck;
+  if (identityCheck) {
+    setText("#repair-identity-hint", identityCheck.message);
+  }
 }
 
 window.themeSchedulerOpenHealth = async () => {
@@ -742,7 +826,7 @@ $("#interactive-time-dial").addEventListener("dialdragend", (event) => {
     $(`#boundary-tab-${next}`)?.focus();
     showToast(`已切换至${next === "day" ? "昼间" : "夜间"}`, false, {
       centered: true,
-      duration: 1500,
+      duration: 1100,
     });
   }, 180);
 });
@@ -783,8 +867,11 @@ $("#open-settings-button").addEventListener("click", () => {
 $("#initial-setup-button").addEventListener("click", () => {
   activatePlanView("settings", { focus: true });
 });
-$("#back-to-overview-button").addEventListener("click", () => {
-  if (state.dirty && !window.confirm("放弃尚未保存的设置并返回概览？")) return;
+$("#back-to-overview-button").addEventListener("click", async () => {
+  if (state.dirty && !await requestConfirmation(
+    "尚未保存的设置将会丢失。",
+    { title: "返回计划概览？", acceptLabel: "放弃并返回" },
+  )) return;
   if (state.dirty) {
     state.draft = cloneConfig(state.loadedConfig);
     state.draftColors = cloneColors(state.loadedColors);
@@ -842,7 +929,7 @@ $("#notify-status").addEventListener("change", (event) => {
   updateDraftValue("notifyStatusChanges", event.target.checked);
 });
 
-async function submitWorkspace() {
+async function submitWorkspace(applyCurrent = false) {
   setText("#form-error", "");
   const localError = validateFiveMinuteDraft();
   if (localError) {
@@ -859,6 +946,10 @@ async function submitWorkspace() {
     activatePage("plan", { planView: "settings" });
     return null;
   }
+  if (applyCurrent && !await requestConfirmation(
+    "将先保存完整计划，再立即切换为当前时段的应用模式和强调色。",
+    { title: "保存并应用当前时段？", acceptLabel: "保存并应用" },
+  )) return null;
   const payload = workspacePayload();
   let validation;
   try {
@@ -875,14 +966,19 @@ async function submitWorkspace() {
     return null;
   }
   const result = await callApi(
-    "saveWorkspace",
-    () => window.pywebview.api.save_workspace(payload, true),
-    state.initialSetupPending
-      ? "计划已保存并启用；Windows 外观保持不变"
-      : "计划、昼夜颜色与任务定义已更新",
+    applyCurrent ? "saveWorkspaceAndApply" : "saveWorkspace",
+    () => applyCurrent
+      ? window.pywebview.api.save_workspace_and_apply(payload, true)
+      : window.pywebview.api.save_workspace(payload, true),
+    applyCurrent
+      ? "计划已保存，并已应用当前时段外观"
+      : state.initialSetupPending
+        ? "计划已保存并启用；Windows 外观保持不变"
+        : "计划、昼夜颜色与任务定义已更新",
   );
   if (result) renderWorkspaceResult(result);
-  const saveCompleted = ["changed", "no-change"].includes(result?.result);
+  const saveCompleted = ["changed", "no-change"].includes(result?.result)
+    || result?.planSaved === true;
   if (saveCompleted) {
     state.dirty = false;
     await refresh({ resetDraft: true });
@@ -893,11 +989,14 @@ async function submitWorkspace() {
 
 $("#config-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  await submitWorkspace();
+  await submitWorkspace(event.submitter?.id === "save-apply-button");
 });
 
 $("#refresh-button").addEventListener("click", async () => {
-  if (state.dirty && !window.confirm("放弃尚未保存的页面修改并重新读取？")) return;
+  if (state.dirty && !await requestConfirmation(
+    "尚未保存的页面修改将会丢失。",
+    { title: "重新读取已保存设置？", acceptLabel: "放弃并重新读取" },
+  )) return;
   state.dirty = false;
   await refresh({ resetDraft: true });
 });
@@ -925,15 +1024,16 @@ $("#copy-diagnostic-button").addEventListener("click", async () => {
     setTimeout(() => {
       button.textContent = "复制摘要";
     }, 1800);
-    showToast("诊断摘要已复制；未包含完整路径或原始 JSON。");
   } catch (error) {
-    showToast(String(error.message || error), true);
+    showToast(String(error.message || error), true, { duration: 2800 });
   }
 });
 $$("[data-import-appearance]").forEach((button) => {
   button.addEventListener("click", async () => {
     if (button.dataset.readEnabled !== "true") {
-      showToast("安全预览不会读取真实 Windows 外观；安装态才可使用。");
+      showToast("安全预览不会读取真实 Windows 外观；安装态才可使用。", false, {
+        duration: 1200,
+      });
       return;
     }
     const profile = button.dataset.importAppearance;
@@ -960,15 +1060,24 @@ $$("[data-import-appearance]").forEach((button) => {
   });
 });
 $("#repair-identity-button").addEventListener("click", async () => {
-  if (!window.confirm("仅修复 ThemeScheduler 拥有的通知快捷方式身份和 URI 协议？")) return;
+  if (!await requestConfirmation(
+    "仅修复 ThemeScheduler 拥有的通知快捷方式身份和 URI 协议。",
+    { title: "修复通知身份？", acceptLabel: "修复" },
+  )) return;
   const result = await callApi(
     "repairNotificationIdentity",
     () => window.pywebview.api.repair_notification_identity(true),
   );
-  if (result) await refresh();
+  if (result) {
+    await refresh();
+    await runHealthInspection();
+  }
 });
 $("#repair-task-button").addEventListener("click", async () => {
-  if (!window.confirm("按当前配置修复 ThemeScheduler 任务计划？")) return;
+  if (!await requestConfirmation(
+    "将按当前配置完整重建 ThemeScheduler 任务计划。",
+    { title: "修复任务计划？", acceptLabel: "修复" },
+  )) return;
   const result = await callApi(
     "repairTask",
     () => window.pywebview.api.repair_task(true),
@@ -976,7 +1085,10 @@ $("#repair-task-button").addEventListener("click", async () => {
   if (result) await refresh();
 });
 $("#reset-preferences-button").addEventListener("click", async () => {
-  if (!window.confirm("恢复默认时间和通知设置，并同步修复任务计划？昼夜应用模式选择会保留。")) return;
+  if (!await requestConfirmation(
+    "将恢复默认时间和通知设置，并同步修复任务计划；昼夜应用模式选择会保留。",
+    { title: "恢复默认设置？", acceptLabel: "恢复" },
+  )) return;
   const result = await callApi(
     "resetPreferences",
     () => window.pywebview.api.reset_preferences(true),
@@ -987,7 +1099,10 @@ $("#reset-preferences-button").addEventListener("click", async () => {
   }
 });
 $("#restore-install-button").addEventListener("click", async () => {
-  if (!window.confirm("暂停自动切换并恢复安装前的应用模式和强调色？Windows 系统模式不会改变。")) return;
+  if (!await requestConfirmation(
+    "将暂停自动切换，并恢复安装前的应用模式和强调色；Windows 系统模式不会改变。",
+    { title: "恢复安装前外观？", acceptLabel: "暂停并恢复" },
+  )) return;
   const result = await callApi(
     "restoreInstallAppearance",
     () => window.pywebview.api.restore_install_appearance(true),
@@ -995,7 +1110,10 @@ $("#restore-install-button").addEventListener("click", async () => {
   if (result) await refresh();
 });
 $("#uninstall-button").addEventListener("click", async () => {
-  if (!window.confirm("启动独立卸载器？实际清理仍需在卸载器中确认。")) return;
+  if (!await requestConfirmation(
+    "将打开独立卸载器；实际清理仍需在卸载器中确认。",
+    { title: "启动卸载器？", acceptLabel: "启动" },
+  )) return;
   await callApi(
     "launchUninstaller",
     () => window.pywebview.api.launch_uninstaller(true),

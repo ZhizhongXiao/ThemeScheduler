@@ -18,10 +18,10 @@ from .accent_theme import (
     sha256_bytes,
     write_new_bytes,
 )
+from .appearance import ThemeMode
 from .backup import InstallBackup
 from .persistence import atomic_write_json, captured_at, load_json_object
 from .storage import UserDataLayout
-from .theme import ThemeMode
 
 
 @dataclass(frozen=True)

@@ -13,7 +13,7 @@ param(
     [string]$Phase,
 
     [string]$ReleaseRoot,
-    [string]$ExpectedVersion = "0.1.2",
+    [string]$ExpectedVersion = "0.1.3",
     [ValidatePattern("^$|^[0-9A-Fa-f]{64}$")]
     [string]$ExpectedSetupSha256 = "",
     [ValidateSet("", "light", "dark")]

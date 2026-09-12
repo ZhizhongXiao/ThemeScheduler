@@ -14,6 +14,7 @@ from ..accent_theme import (
     LiveThemeApplyError,
     theme_visual_state_from_dict,
 )
+from ..appearance import ThemeMode
 from ..auto_transaction import (
     AUTO_TRANSACTION_FILE_NAME,
     AutoTransaction,
@@ -29,6 +30,7 @@ from ..core import (
     AutoRunPlan,
     Clock,
     ExecutionLock,
+    RunIntent,
     SystemClock,
     plan_auto_run,
 )
@@ -41,7 +43,6 @@ from ..runtime_retention import (
 )
 from ..state import AppState, StateStore
 from ..storage import UserDataLayout
-from ..theme import ThemeMode
 from .backend import AutoWindowsBackend
 from .failure import AutoFailureMixin
 from .outcome import AutoRunOutcome
@@ -85,13 +86,10 @@ class AutoRunner(AutoFailureMixin, AutoRecoveryMixin):
         state_store: StateStore | None = None,
         event_log: EventLogWriter | None = None,
         cleanup_callback: CleanupCallback | None = None,
-        force_apply: bool = False,
-        event_trigger: str = "auto",
+        intent: RunIntent = RunIntent.AUTOMATIC,
     ) -> None:
-        if not isinstance(force_apply, bool):
-            raise ValueError("force_apply must be boolean.")
-        if event_trigger not in {"auto", "manual"}:
-            raise ValueError("event_trigger must be auto or manual.")
+        if not isinstance(intent, RunIntent):
+            raise ValueError("intent must be a RunIntent.")
         self.layout = layout
         self.execution_lock = execution_lock
         self.windows = windows
@@ -100,8 +98,7 @@ class AutoRunner(AutoFailureMixin, AutoRecoveryMixin):
         self.state_store = state_store or StateStore(layout.state)
         self.event_log = event_log or EventLogWriter(layout.event_log)
         self.cleanup_callback = cleanup_callback or self._cleanup_runtime
-        self.force_apply = force_apply
-        self.event_trigger = event_trigger
+        self.intent = intent
         self._active_transaction_id: str | None = None
 
     @staticmethod
@@ -161,7 +158,9 @@ class AutoRunner(AutoFailureMixin, AutoRecoveryMixin):
                 level=level,
                 event=event,
                 result=result,
-                trigger=self.event_trigger,
+                trigger=(
+                    "manual" if self.intent is RunIntent.MANUAL_CURRENT else "auto"
+                ),
                 target_profile=target,
                 transaction_id=(transaction or self._active_transaction_id),
                 error_code=error_code,
@@ -246,7 +245,7 @@ class AutoRunner(AutoFailureMixin, AutoRecoveryMixin):
                 config,
                 state,
                 now,
-                force_apply=self.force_apply,
+                intent=self.intent,
             )
             return _TrustedRun(now, timestamp, plan, state)
         except Exception as exc:
@@ -288,7 +287,7 @@ class AutoRunner(AutoFailureMixin, AutoRecoveryMixin):
                 (
                     "Immediate synchronization is blocked while automatic "
                     "switching is paused; Windows was not changed."
-                    if self.event_trigger == "manual"
+                    if self.intent is RunIntent.MANUAL_CURRENT
                     else ("Automatic switching is paused; Windows was not changed.")
                 ),
             )
@@ -627,7 +626,11 @@ class AutoRunner(AutoFailureMixin, AutoRecoveryMixin):
         )
         return self._outcome(
             AutoResultKind.APPLIED,
-            "Automatic profile applied, verified, committed, and logged.",
+            (
+                "Current-period profile applied, verified, committed, and logged."
+                if self.intent is RunIntent.MANUAL_CURRENT
+                else "Automatic profile applied, verified, committed, and logged."
+            ),
             target=context.trusted.plan.target_profile,
             transaction=context.transaction_directory,
             learned=context.learned,

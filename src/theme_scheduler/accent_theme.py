@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import Any, Protocol
 from uuid import UUID, uuid4
 
-from .accent import AccentSnapshot
 from .errors import DataError, ThemeSchedulerRuntimeError
 from .resources import resource_path
 from .windows_subprocess import no_window_options
@@ -229,21 +228,6 @@ def normalize_theme_visual_state(
             "Normalized recovery theme did not match semantic targets."
         )
     return content
-
-
-def colorization_from_snapshot(snapshot: AccentSnapshot) -> int:
-    value = snapshot.values[COLORIZATION_IDENTIFIER]
-    if (
-        not value.exists
-        or value.type_code != 4
-        or isinstance(value.data, bool)
-        or not isinstance(value.data, int)
-        or not 0 <= value.data <= 0xFFFFFFFF
-    ):
-        raise ThemeFileError(
-            "Target snapshot has no valid DWM ColorizationColor DWORD."
-        )
-    return value.data
 
 
 def build_managed_theme(

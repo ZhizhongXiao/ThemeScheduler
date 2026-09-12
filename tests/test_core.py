@@ -11,6 +11,7 @@ from theme_scheduler.core import (
     AutoExitCode,
     AutoPlanKind,
     AutoResultKind,
+    RunIntent,
     learning_source,
     mutex_name_for_data_root,
     plan_auto_run,
@@ -117,12 +118,12 @@ class LearningDecisionTests(unittest.TestCase):
         self.assertEqual(plan.target_apps_theme, "light")
         self.assertIsNone(plan.learn_profile)
 
-    def test_forced_same_profile_plan_applies_without_learning(self) -> None:
+    def test_manual_current_plan_applies_without_learning_or_pause_block(self) -> None:
         plan = plan_auto_run(
             AppConfig.defaults(),
             _successful_state("day"),
             _at(8, 0),
-            force_apply=True,
+            intent=RunIntent.MANUAL_CURRENT,
         )
 
         self.assertIs(plan.kind, AutoPlanKind.APPLY)
@@ -142,9 +143,9 @@ class LearningDecisionTests(unittest.TestCase):
                 AppConfig.defaults(),
                 paused,
                 _at(8, 0),
-                force_apply=True,
+                intent=RunIntent.MANUAL_CURRENT,
             ).kind,
-            AutoPlanKind.PAUSED,
+            AutoPlanKind.APPLY,
         )
 
 

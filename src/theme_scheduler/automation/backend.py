@@ -20,8 +20,8 @@ from ..accent_theme import (
     WindowsThemeApplyBackend,
     read_visual_state,
 )
+from ..appearance import ThemeMode
 from ..storage import UserDataLayout
-from ..theme import ThemeMode
 
 
 class AutoWindowsBackend(Protocol):

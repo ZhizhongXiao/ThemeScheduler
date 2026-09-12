@@ -115,10 +115,8 @@ def create_live_auto_runner(
     layout: UserDataLayout,
     *,
     decision_time: datetime | None = None,
-    force_apply: bool = False,
-    event_trigger: str = "auto",
 ) -> tuple[AutoRunner, str]:
-    """Build the verified live runner shared by auto and manual sync entries."""
+    """Build the verified live runner used by scheduled automatic entries."""
 
     environment = collect_environment()
     windows_build = _validate_live_environment(environment)
@@ -128,8 +126,6 @@ def create_live_auto_runner(
         WindowsNamedMutexLock(mutex_name),
         WindowsAutoBackend(layout, windows_build=windows_build),
         clock=(_FixedClock(decision_time) if decision_time is not None else None),
-        force_apply=force_apply,
-        event_trigger=event_trigger,
     )
     return runner, mutex_name
 

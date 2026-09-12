@@ -31,9 +31,9 @@
 | 产物保留与清理 | [ARTIFACTS.md](ARTIFACTS.md) |
 | 测试命令与层级 | [TESTING.md](TESTING.md) |
 
-当前正式版本为 `0.1.2`。最终门禁、双构建、Defender、开发机生命周期以及另一台
-无 Python Windows x64 设备的 TS-142 验收均已完成；正式发布位于
-`artifacts/releases/0.1.2`。
+当前正式版本为 `0.1.3`。最终门禁、双构建、Defender 和变更驱动的开发机验收
+均由冻结证据记录；0.1.2 的无 Python Windows x64 TS-142 兼容性证据继续有效。
+正式发布位于 `artifacts/releases/0.1.3`。
 
 ## 测试选择
 

@@ -1,7 +1,7 @@
 # ThemeScheduler Windows 打包方案
 
-状态：`0.1.2` 已完成最终门禁、双构建、Defender、开发机生命周期和干净设备
-验收，正式冻结于 `artifacts/releases/0.1.2`。后续新候选只能写入
+状态：`0.1.3` 使用同一冻结流程，正式发布位于
+`artifacts/releases/0.1.3`。后续新候选只能写入
 `artifacts/build/`，完整证据通过后才能进入正式发布目录。
 每个版本的 `dist/` 只放用户分发文件，`evidence/` 保存发布清单、构建环境、
 测试/质量报告和展开载荷证据；根 `SHA256SUMS.txt` 绑定两部分。
@@ -40,7 +40,7 @@ ThemeScheduler 是需要任务计划、快捷方式、升级、修复和卸载�
 
 `pyproject.toml` 已分离运行依赖和 `build` 构建依赖，`uv.lock` 已生成。锁文件属于发布输入，必须提交并在构建前执行一致性检查。
 
-`0.1.2` 的可复现构建入口如下。必须使用新的、不存在的
+`0.1.3` 的可复现构建入口如下。必须使用新的、不存在的
 候选输出根，不能直接写入或覆盖 `artifacts/releases/` 下的正式版本：
 
 ```powershell
@@ -49,8 +49,8 @@ uv sync --group build --group quality
 .venv\Scripts\python.exe tools\test.py release
 
 .venv\Scripts\python.exe packaging\build_release.py `
-  --output-root artifacts\build\stage17-rcN `
-  --version 0.1.2 `
+  --output-root artifacts\build\stage19-0.1.3-rcN `
+  --version 0.1.3 `
   --python .venv\Scripts\python.exe `
   --test-report artifacts\test-reports\<当前源码的-release-report>.json
 ```

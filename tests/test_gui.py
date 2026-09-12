@@ -183,6 +183,34 @@ class FakeIdentityRepairService:
         return FakeIdentityRepairOutcome()
 
 
+class FakeManualAppearanceOutcome:
+    def __init__(self, result: str = "applied") -> None:
+        self.result = result
+
+    def as_dict(self):
+        return {
+            "result": self.result,
+            "exitCode": 0 if self.result == "applied" else 30,
+            "targetProfile": "day",
+            "transactionDirectory": None,
+            "learnedProfile": None,
+            "windowsChanged": self.result == "applied",
+            "stateChanged": self.result == "applied",
+            "recovered": False,
+            "message": self.result,
+        }
+
+
+class FakeManualAppearanceService:
+    def __init__(self) -> None:
+        self.calls = 0
+        self.result = "applied"
+
+    def apply_current(self):
+        self.calls += 1
+        return FakeManualAppearanceOutcome(self.result)
+
+
 def payload(**changes):
     value = {
         "dayStart": "06:15",
@@ -235,6 +263,7 @@ class GuiApiTests(unittest.TestCase):
         self.shell = FakeShell()
         self.maintenance = FakeMaintenanceService()
         self.identity_repair = FakeIdentityRepairService()
+        self.manual_appearance = FakeManualAppearanceService()
         self.api = GuiApi(
             self.layout,
             executable=self.executable,
@@ -243,6 +272,7 @@ class GuiApiTests(unittest.TestCase):
             maintenance_service_factory=lambda: self.maintenance,
             health_service_factory=FakeHealthService,
             identity_repair_service_factory=(lambda: self.identity_repair),
+            manual_appearance_service_factory=(lambda: self.manual_appearance),
             current_appearance_reader=lambda: ThemeVisualState(
                 "0",
                 0xD0744DA9,
@@ -360,16 +390,6 @@ class GuiApiTests(unittest.TestCase):
         self.assertEqual(result["config"]["dayStart"], "06:15")
         self.assertIn("incomplete", result["message"])
 
-    def test_config_validation_is_strict_and_side_effect_free(self) -> None:
-        valid = self.api.validate_config(payload())
-        invalid = self.api.validate_config(payload(extra=True))
-        equal_times = self.api.validate_config(payload(nightStart="06:15"))
-
-        self.assertTrue(valid["valid"])
-        self.assertFalse(invalid["valid"])
-        self.assertFalse(equal_times["valid"])
-        self.assertEqual(self.scheduler.register_count, 0)
-
     def test_workspace_validation_requires_matching_hex_and_rgb(self) -> None:
         valid = self.api.validate_workspace(workspace_payload())
         invalid = self.api.validate_workspace(
@@ -389,19 +409,37 @@ class GuiApiTests(unittest.TestCase):
         self.assertIn("differ", invalid["message"])
         self.assertEqual(self.scheduler.register_count, 0)
 
-    def test_save_and_repair_require_confirmation(self) -> None:
-        changed = payload(dayStart="07:00", nightStart="22:30")
+    def test_workspace_validation_rejects_each_structural_boundary(self) -> None:
+        not_object = self.api.validate_workspace(None)  # type: ignore[arg-type]
+        missing = workspace_payload()
+        missing.pop("nightColor")
+        missing_result = self.api.validate_workspace(missing)
+        color_not_object = self.api.validate_workspace(
+            workspace_payload(dayColor="purple")
+        )
+        color_wrong_fields = self.api.validate_workspace(
+            workspace_payload(dayColor={"hex": "#744DA9"})
+        )
 
-        blocked = self.api.save_config(changed)
+        for result in (
+            not_object,
+            missing_result,
+            color_not_object,
+            color_wrong_fields,
+        ):
+            self.assertFalse(result["valid"])
+
+    def test_save_and_repair_require_confirmation(self) -> None:
         workspace_blocked = self.api.save_workspace(workspace_payload())
+        apply_blocked = self.api.save_workspace_and_apply(workspace_payload())
         repair_blocked = self.api.repair_task()
         identity_blocked = self.api.repair_notification_identity()
         reset_blocked = self.api.reset_preferences()
         restore_blocked = self.api.restore_install_appearance()
         uninstall_blocked = self.api.launch_uninstaller()
 
-        self.assertEqual(blocked["result"], "blocked")
         self.assertEqual(workspace_blocked["result"], "blocked")
+        self.assertEqual(apply_blocked["result"], "blocked")
         self.assertEqual(repair_blocked["result"], "blocked")
         self.assertEqual(identity_blocked["result"], "blocked")
         self.assertEqual(reset_blocked["result"], "blocked")
@@ -420,8 +458,8 @@ class GuiApiTests(unittest.TestCase):
             clock=FixedClock(),  # type: ignore[arg-type]
         )
 
-        save = preview.save_config(payload(dayStart="07:00"), True)
         workspace = preview.save_workspace(workspace_payload(), True)
+        apply = preview.save_workspace_and_apply(workspace_payload(), True)
         appearance_read = preview.read_current_windows_appearance()
         repair = preview.repair_task(True)
         identity = preview.repair_notification_identity(True)
@@ -429,8 +467,8 @@ class GuiApiTests(unittest.TestCase):
         restore = preview.restore_install_appearance(True)
         uninstall = preview.launch_uninstaller(True)
 
-        self.assertEqual(save["result"], "blocked")
         self.assertEqual(workspace["result"], "blocked")
+        self.assertEqual(apply["result"], "blocked")
         self.assertEqual(appearance_read["result"], "blocked")
         self.assertEqual(repair["result"], "blocked")
         self.assertEqual(identity["result"], "blocked")
@@ -469,19 +507,6 @@ class GuiApiTests(unittest.TestCase):
         self.assertEqual(saved["result"], "blocked")
         self.assertEqual(self.scheduler.register_count, 0)
 
-    def test_confirmed_save_updates_config_and_task(self) -> None:
-        changed = payload(dayStart="07:00", nightStart="22:30")
-
-        result = self.api.save_config(changed, True)
-
-        self.assertEqual(result["result"], "changed")
-        config = ConfigStore(self.layout.config).load()
-        self.assertEqual(config.day_start, "07:00")
-        self.assertEqual(
-            {item.local_time for item in self.scheduler.task.triggers},  # type: ignore[union-attr]
-            {"06:55", "07:00", "22:25", "22:30"},
-        )
-
     def test_confirmed_workspace_save_updates_profiles_without_windows(
         self,
     ) -> None:
@@ -508,6 +533,64 @@ class GuiApiTests(unittest.TestCase):
             .colorization_color,
             0xD0102030,
         )
+
+    def test_save_and_apply_uses_committed_workspace_and_reports_target(self) -> None:
+        self.create_profiles()
+        result = self.api.save_workspace_and_apply(
+            workspace_payload(dayStart="07:00"),
+            True,
+        )
+
+        self.assertEqual(result["action"], "save-workspace-and-apply")
+        self.assertEqual(result["result"], "changed")
+        self.assertTrue(result["planSaved"])
+        self.assertEqual(result["targetProfile"], "day")
+        self.assertTrue(result["windowsChanged"])
+        self.assertEqual(self.manual_appearance.calls, 1)
+        self.assertEqual(ConfigStore(self.layout.config).load().day_start, "07:00")
+
+    def test_save_and_apply_failure_keeps_verified_plan(self) -> None:
+        self.create_profiles()
+        self.manual_appearance.result = "apply-failed-rolled-back"
+
+        result = self.api.save_workspace_and_apply(
+            workspace_payload(dayStart="07:00"),
+            True,
+        )
+
+        self.assertEqual(result["result"], "partial-failure")
+        self.assertTrue(result["planSaved"])
+        self.assertFalse(result["windowsChanged"])
+        self.assertEqual(ConfigStore(self.layout.config).load().day_start, "07:00")
+
+    def test_save_failure_does_not_start_manual_application(self) -> None:
+        result = self.api.save_workspace_and_apply(
+            workspace_payload(dayStart="invalid"),
+            True,
+        )
+
+        self.assertNotEqual(result["result"], "changed")
+        self.assertEqual(self.manual_appearance.calls, 0)
+
+    def test_saved_plan_reports_unavailable_manual_application(self) -> None:
+        self.create_profiles()
+        self.api._manual_appearance_service_factory = None
+        result = self.api.save_workspace_and_apply(workspace_payload(), True)
+        self.assertEqual(result["result"], "partial-failure")
+        self.assertTrue(result["planSaved"])
+        self.assertNotIn("application", result)
+
+    def test_manual_application_exception_is_a_partial_failure(self) -> None:
+        self.create_profiles()
+
+        def fail() -> object:
+            raise OSError("manual apply failed")
+
+        self.api._manual_appearance_service_factory = fail
+        result = self.api.save_workspace_and_apply(workspace_payload(), True)
+        self.assertEqual(result["result"], "partial-failure")
+        self.assertTrue(result["planSaved"])
+        self.assertEqual(result["application"]["result"], "fatal-failure")
 
     def test_first_workspace_save_enables_pending_initial_setup_without_sync(
         self,
@@ -751,6 +834,50 @@ class GuiAssetsAndRuntimeTests(unittest.TestCase):
                 api.save_workspace(workspace_payload(), True)["result"],
                 "blocked",
             )
+
+    def test_live_factory_composes_manual_current_appearance_service(self) -> None:
+        class KnownFolders:
+            @staticmethod
+            def programs() -> Path:
+                return Path("Programs")
+
+            @staticmethod
+            def desktop() -> Path:
+                return Path("Desktop")
+
+        class ShortcutDefinition:
+            managed_paths: tuple[Path, ...] = ()
+
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch(
+                "theme_scheduler.workbench.factory.WindowsTaskSchedulerBackend",
+                return_value=MemoryScheduler(),
+            ),
+            patch(
+                "theme_scheduler.workbench.factory.WindowsKnownFolderReader",
+                return_value=KnownFolders(),
+            ),
+            patch(
+                "theme_scheduler.workbench.factory.ShortcutPlan.create",
+                return_value=ShortcutDefinition(),
+            ),
+            patch("theme_scheduler.workbench.factory.WindowsAutoBackend"),
+        ):
+            root = Path(directory)
+            executable = (
+                root / "Programs" / "ThemeScheduler" / "app" / "ThemeScheduler.exe"
+            )
+            executable.parent.mkdir(parents=True)
+            executable.touch()
+            api = create_live_gui_api(
+                UserDataLayout(root / "LocalAppData" / "ThemeScheduler"),
+                executable,
+                allow_live_writes=True,
+            )
+            service = api._manual_appearance_service_factory()
+
+        self.assertEqual(type(service).__name__, "ManualAppearanceService")
 
     def test_live_executable_rejects_interpreter_and_missing_target(self) -> None:
         with self.assertRaisesRegex(ValueError, "interpreter"):

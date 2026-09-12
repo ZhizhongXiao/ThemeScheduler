@@ -1,33 +1,23 @@
-"""Read-only diagnostics used by the Windows behavior prototypes.
-
-This module deliberately has no registry write API.  The candidate keys below
-are observation targets for prototype work and are not yet the frozen accent
-snapshot schema used by the future product.
-"""
+"""Read-only runtime and Windows release diagnostics."""
 
 from __future__ import annotations
 
 import os
 import platform
 import sys
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from .errors import DataError, ThemeSchedulerRuntimeError
+from .errors import ThemeSchedulerRuntimeError
 from .persistence import captured_at
 
-SNAPSHOT_SCHEMA_VERSION = 1
-SNAPSHOT_KIND = "themescheduler.registry-baseline"
+ENVIRONMENT_SCHEMA_VERSION = 1
 ENVIRONMENT_KIND = "themescheduler.environment"
 
 
 class UnsupportedPlatformError(ThemeSchedulerRuntimeError):
     """Raised when a Windows-only diagnostic is used elsewhere."""
-
-
-class InvalidSnapshotError(DataError):
-    """Raised when a registry snapshot cannot be compared safely."""
 
 
 @dataclass(frozen=True)
@@ -36,24 +26,6 @@ class RegistryKeySpec:
     path: str
     purpose: str
 
-
-CANDIDATE_THEME_KEYS: tuple[RegistryKeySpec, ...] = (
-    RegistryKeySpec(
-        "HKEY_CURRENT_USER",
-        r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
-        "system and application theme observation",
-    ),
-    RegistryKeySpec(
-        "HKEY_CURRENT_USER",
-        r"Software\Microsoft\Windows\CurrentVersion\Explorer\Accent",
-        "Explorer accent observation",
-    ),
-    RegistryKeySpec(
-        "HKEY_CURRENT_USER",
-        r"Software\Microsoft\Windows\DWM",
-        "window frame and accent observation",
-    ),
-)
 
 WINDOWS_VERSION_KEY = RegistryKeySpec(
     "HKEY_LOCAL_MACHINE",
@@ -172,7 +144,7 @@ def collect_environment(reader: RegistryReader = read_registry_key) -> dict[str,
     """Collect non-identifying runtime and Windows release information."""
 
     return {
-        "schemaVersion": SNAPSHOT_SCHEMA_VERSION,
+        "schemaVersion": ENVIRONMENT_SCHEMA_VERSION,
         "kind": ENVIRONMENT_KIND,
         "capturedAt": captured_at(),
         "runtime": {
@@ -187,133 +159,4 @@ def collect_environment(reader: RegistryReader = read_registry_key) -> dict[str,
             "machine": platform.machine(),
         },
         "windowsRelease": _windows_release(reader),
-    }
-
-
-def capture_registry_snapshot(
-    specs: Iterable[RegistryKeySpec] = CANDIDATE_THEME_KEYS,
-    reader: RegistryReader = read_registry_key,
-) -> dict[str, Any]:
-    """Capture a read-only baseline of candidate personalization keys."""
-
-    return {
-        "schemaVersion": SNAPSHOT_SCHEMA_VERSION,
-        "kind": SNAPSHOT_KIND,
-        "capturedAt": captured_at(),
-        "environment": collect_environment(reader),
-        "keys": [reader(spec) for spec in specs],
-    }
-
-
-def validate_snapshot(snapshot: Mapping[str, Any]) -> None:
-    if snapshot.get("kind") != SNAPSHOT_KIND:
-        raise InvalidSnapshotError("Unexpected snapshot kind.")
-    if snapshot.get("schemaVersion") != SNAPSHOT_SCHEMA_VERSION:
-        raise InvalidSnapshotError("Unsupported snapshot schema version.")
-    if not isinstance(snapshot.get("keys"), list):
-        raise InvalidSnapshotError("Snapshot keys must be a list.")
-
-
-def _key_map(snapshot: Mapping[str, Any]) -> dict[tuple[str, str], Mapping[str, Any]]:
-    result: dict[tuple[str, str], Mapping[str, Any]] = {}
-    for key in snapshot["keys"]:
-        if not isinstance(key, Mapping):
-            raise InvalidSnapshotError("Each registry key must be an object.")
-        root = key.get("root")
-        path = key.get("path")
-        if not isinstance(root, str) or not isinstance(path, str):
-            raise InvalidSnapshotError("Registry key identity is missing.")
-        result[(root.casefold(), path.casefold())] = key
-    return result
-
-
-def _value_map(key: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
-    values = key.get("values", [])
-    if not isinstance(values, list):
-        raise InvalidSnapshotError("Registry values must be a list.")
-    result: dict[str, Mapping[str, Any]] = {}
-    for value in values:
-        if not isinstance(value, Mapping) or not isinstance(value.get("name"), str):
-            raise InvalidSnapshotError("Registry value identity is missing.")
-        result[value["name"].casefold()] = value
-    return result
-
-
-def diff_registry_snapshots(
-    before: Mapping[str, Any], after: Mapping[str, Any]
-) -> dict[str, Any]:
-    """Return deterministic key and value changes between two snapshots."""
-
-    validate_snapshot(before)
-    validate_snapshot(after)
-    before_keys = _key_map(before)
-    after_keys = _key_map(after)
-    changes: list[dict[str, Any]] = []
-
-    for identity in sorted(set(before_keys) | set(after_keys)):
-        old_key = before_keys.get(identity)
-        new_key = after_keys.get(identity)
-        display_key = new_key or old_key
-        assert display_key is not None
-        base = {"root": display_key["root"], "path": display_key["path"]}
-
-        if old_key is None:
-            changes.append({**base, "change": "key-added", "after": new_key})
-            continue
-        if new_key is None:
-            changes.append({**base, "change": "key-removed", "before": old_key})
-            continue
-        if bool(old_key.get("exists")) != bool(new_key.get("exists")):
-            changes.append(
-                {
-                    **base,
-                    "change": "key-existence-changed",
-                    "before": bool(old_key.get("exists")),
-                    "after": bool(new_key.get("exists")),
-                }
-            )
-        if old_key.get("error") != new_key.get("error"):
-            changes.append(
-                {
-                    **base,
-                    "change": "key-read-status-changed",
-                    "before": old_key.get("error"),
-                    "after": new_key.get("error"),
-                }
-            )
-
-        old_values = _value_map(old_key)
-        new_values = _value_map(new_key)
-        for value_name in sorted(set(old_values) | set(new_values)):
-            old_value = old_values.get(value_name)
-            new_value = new_values.get(value_name)
-            display_value = new_value or old_value
-            assert display_value is not None
-            value_base = {**base, "name": display_value["name"]}
-            if old_value is None:
-                changes.append(
-                    {**value_base, "change": "value-added", "after": new_value}
-                )
-            elif new_value is None:
-                changes.append(
-                    {**value_base, "change": "value-removed", "before": old_value}
-                )
-            elif old_value != new_value:
-                changes.append(
-                    {
-                        **value_base,
-                        "change": "value-changed",
-                        "before": old_value,
-                        "after": new_value,
-                    }
-                )
-
-    return {
-        "schemaVersion": SNAPSHOT_SCHEMA_VERSION,
-        "kind": "themescheduler.registry-diff",
-        "comparedAt": captured_at(),
-        "beforeCapturedAt": before.get("capturedAt"),
-        "afterCapturedAt": after.get("capturedAt"),
-        "changeCount": len(changes),
-        "changes": changes,
     }

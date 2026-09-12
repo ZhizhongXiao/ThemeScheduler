@@ -1,8 +1,8 @@
-# ThemeScheduler 0.1.2 结项发布契约
+# ThemeScheduler 0.1.3 发布契约
 
 ## 1. 目标与范围
 
-M17 生成面向 Windows 11 x64、少量熟人分发的 `0.1.2` 结项候选。
+当前流程生成面向 Windows 11 x64、少量熟人分发的 `0.1.3` 候选。
 候选继续采用当前用户安装、单文件 Setup、`onedir` 主程序和独立单文件
 卸载器。目标设备不需要 Python、pip、uv 或虚拟环境。
 
@@ -20,7 +20,7 @@ M17 生成面向 Windows 11 x64、少量熟人分发的 `0.1.2` 结项候选。
 - Windows 11 x64；
 - `PYTHONHASHSEED=0`；
 - `SOURCE_DATE_EPOCH=1767225600`；
-- `pyproject.toml`、包版本、三份 EXE 版本资源和载荷清单版本均为 `0.1.2`；
+- `pyproject.toml`、包版本、三份 EXE 版本资源和载荷清单版本均为 `0.1.3`；
 - `assets/ThemeScheduler.ico` 为七尺寸确定性 ICO。
 
 项目当前不是 Git 仓库，因此发布候选使用
@@ -53,8 +53,8 @@ uv sync --group build --group quality
 
 ```powershell
 .venv\Scripts\python.exe packaging\build_release.py `
-  --output-root artifacts\build\stage17-rcN `
-  --version 0.1.2 `
+  --output-root artifacts\build\stage19-0.1.3-rcN `
+  --version 0.1.3 `
   --python .venv\Scripts\python.exe `
   --test-report artifacts\test-reports\<release-report>.json
 ```
@@ -114,7 +114,7 @@ Setup 与用户说明。`dist/RELEASE-README.md` 明确说明未签名状态、�
 
 ## 6. 实机与兼容性门槛
 
-实机写入仍按 [INSTALLATION.md](INSTALLATION.md) 单独授权。`0.1.2` 使用变更驱动
+实机写入仍按 [INSTALLATION.md](INSTALLATION.md) 单独授权。`0.1.3` 使用变更驱动
 矩阵，至少覆盖：
 
 - 当前无安装基线上的经典 Setup 首次安装，默认不立即同步；
@@ -154,11 +154,13 @@ WebView2 已存在路径必须通过。缺失联网和缺失离线路径如果�
 - 强调色主路径依赖已隔离且经实机验证的未公开 `IThemeManager2`；
 - WebView2 Runtime 是系统依赖，不等同于随程序打包的桥接 DLL。
 
-## 9. `0.1.2` 正式发布状态
+## 9. `0.1.3` 正式发布状态
 
-`0.1.2` 承接 M15/M16 的子包重组、类型/覆盖率门禁、GUI 工程收口、
-主题事务回滚策略与 Python 3.12 语法整理。最终 `integration` 与 schema v2
-`release` 均运行 579 项测试并通过；Coverage 逐模块棘轮通过。
+`0.1.3` 在 0.1.2 稳定生命周期之上增加“保存并应用当前时段外观”，删除旧立即
+同步与阶段 1 主题/强调色原型，并完成维护/调试入口收口。工作台使用居中模态确认
+窗；操作结果按权重显示中央中文短提示，低权重且已有页面反馈的操作不再弹出。
+最终测试数量、源码身份、二进制哈希、PE 属性和 Defender 结果以
+`artifacts/releases/0.1.3/evidence/` 中的冻结机器证据为准。
 
 开发机当前用户精简生命周期已经完成：首次安装不创建桌面快捷方式且不立即同步；
 计划边界、三按钮预通知、实际主题切换和成功通知通过；同版本修复保留受保护数据；
@@ -166,10 +168,8 @@ WebView2 已存在路径必须通过。缺失联网和缺失离线路径如果�
 交接后的临时卸载窗口、进度与结果页均可见；点击结果页“退出”后两个卸载进程和
 临时目录约 1 秒内自动清零，不依赖任务管理器或两分钟异常保底。
 
-最终候选的 Setup、主程序、卸载器和 payload manifest 经连续双构建验证为字节
-一致；三个 EXE 均为 `0.1.2`、PE32+ x64、Windows GUI 子系统，Defender 自定义扫描
-零检出。候选已整体冻结到 `artifacts/releases/0.1.2`，Setup SHA-256 为
-`02B3E154D6953B3D9F41C715B38D21E81EE349C9A6F2A74961D788ADF59C2B0A`。
+`0.1.3` 的发布结论只在完整门禁、连续双构建、PE/payload 复验和 Defender 扫描
+通过后成立；冻结目录中的发布清单和 SHA256SUMS 是哈希的唯一权威来源。
 
 TS-142 已在另一台无 Python 的 Windows x64 设备完成 SmartScreen、首次安装、关闭
 GUI 后的计划边界、通知、`0.1.1 → 0.1.2` 六项数据保留升级及独立卸载验收。

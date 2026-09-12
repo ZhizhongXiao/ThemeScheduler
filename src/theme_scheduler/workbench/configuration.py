@@ -15,25 +15,6 @@ from .contracts import WorkbenchBindings, WorkspaceValidationResult
 
 
 class GuiConfigurationMixin(WorkbenchBindings):
-    def validate_config(self, payload: Mapping[str, Any]) -> dict[str, Any]:
-        with self._api_lock:
-            try:
-                config = self._parse_config(payload)
-                return {
-                    "action": "validate-config",
-                    "result": "success",
-                    "valid": True,
-                    "config": self._gui_config(config),
-                    "dataChanged": False,
-                    "windowsChanged": False,
-                    "taskSchedulerChanged": False,
-                    "message": "Configuration is valid.",
-                }
-            except Exception as exc:
-                response = self._error("validate-config", exc)
-                response["valid"] = False
-                return response
-
     def validate_workspace(
         self,
         payload: Mapping[str, Any],
@@ -56,46 +37,6 @@ class GuiConfigurationMixin(WorkbenchBindings):
                 response = self._error("validate-workspace", exc)
                 response["valid"] = False
                 return WorkspaceValidationResult(**response)
-
-    def save_config(
-        self,
-        payload: Mapping[str, Any],
-        confirmed: bool = False,
-    ) -> dict[str, Any]:
-        with self._api_lock:
-            if not self._allow_live_writes:
-                return {
-                    "action": "save-config",
-                    "result": "blocked",
-                    "message": (
-                        "Live task changes are disabled for this development launch."
-                    ),
-                    "dataChanged": False,
-                    "windowsChanged": False,
-                    "taskSchedulerChanged": False,
-                }
-            if confirmed is not True:
-                return {
-                    "action": "save-config",
-                    "result": "blocked",
-                    "message": "Configuration save requires explicit confirmation.",
-                    "dataChanged": False,
-                    "windowsChanged": False,
-                    "taskSchedulerChanged": False,
-                }
-            try:
-                target = self._parse_config(payload)
-                user_id = self._scheduler.current_user_id()
-                service = ConfigurationService(
-                    self._layout,
-                    self._lock_factory(),
-                    self._scheduler,
-                    executable=str(self._executable),
-                    user_id=user_id,
-                )
-                return service.update(target).as_dict()
-            except Exception as exc:
-                return self._error("save-config", exc)
 
     def save_workspace(
         self,
@@ -193,6 +134,64 @@ class GuiConfigurationMixin(WorkbenchBindings):
                 return response
             except Exception as exc:
                 return self._error("save-workspace", exc)
+
+    def save_workspace_and_apply(
+        self,
+        payload: Mapping[str, Any],
+        confirmed: bool = False,
+    ) -> dict[str, Any]:
+        """Save the complete workspace, then apply its current-period profile."""
+
+        with self._api_lock:
+            saved = self.save_workspace(payload, confirmed)
+            saved_result = saved.get("result")
+            if saved_result not in {"changed", "no-change"}:
+                return saved
+            if self._manual_appearance_service_factory is None:
+                return {
+                    "action": "save-workspace-and-apply",
+                    "result": "partial-failure",
+                    "planSaved": True,
+                    "save": saved,
+                    "message": (
+                        "The plan was saved, but current-period appearance "
+                        "application is unavailable."
+                    ),
+                    "dataChanged": bool(saved.get("dataChanged")),
+                    "windowsChanged": False,
+                    "taskSchedulerChanged": bool(saved.get("taskSchedulerChanged")),
+                }
+            try:
+                application = (
+                    self._manual_appearance_service_factory().apply_current().as_dict()
+                )
+            except Exception as exc:
+                application = {
+                    "result": "fatal-failure",
+                    "message": f"{type(exc).__name__}: {exc}",
+                    "windowsChanged": False,
+                }
+            applied = application.get("result") in {"applied", "no-change"}
+            target = application.get("targetProfile")
+            return {
+                "action": "save-workspace-and-apply",
+                "result": "changed" if applied else "partial-failure",
+                "planSaved": True,
+                "save": saved,
+                "application": application,
+                "targetProfile": target,
+                "message": (
+                    f"Plan saved and {target or 'current-period'} appearance applied."
+                    if applied
+                    else (
+                        "The plan was saved, but current-period appearance "
+                        f"application failed. {application.get('message', '')}"
+                    ).strip()
+                ),
+                "dataChanged": bool(saved.get("dataChanged")),
+                "windowsChanged": bool(application.get("windowsChanged")),
+                "taskSchedulerChanged": bool(saved.get("taskSchedulerChanged")),
+            }
 
     def set_paused(
         self,

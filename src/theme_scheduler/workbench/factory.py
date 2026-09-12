@@ -15,6 +15,7 @@ from ..execution_lock import WindowsNamedMutexLock
 from ..health_service import HealthService
 from ..lifecycle import InstallLayout
 from ..maintenance_service import MaintenanceService
+from ..manual_appearance_service import ManualAppearanceService
 from ..notification_identity_service import (
     NotificationIdentityRepairService,
 )
@@ -108,6 +109,13 @@ def create_live_gui_api(
             WindowsNotificationProtocolBackend(),
         )
 
+    def manual_appearance_service_factory() -> ManualAppearanceService:
+        return ManualAppearanceService(
+            layout,
+            lock_factory(),
+            WindowsAutoBackend(layout),
+        )
+
     return GuiApi(
         layout,
         executable=executable,
@@ -116,6 +124,7 @@ def create_live_gui_api(
         maintenance_service_factory=maintenance_service_factory,
         health_service_factory=health_service_factory,
         identity_repair_service_factory=(identity_repair_service_factory),
+        manual_appearance_service_factory=(manual_appearance_service_factory),
         current_appearance_reader=current_appearance_reader,
         allow_live_writes=allow_live_writes,
     )

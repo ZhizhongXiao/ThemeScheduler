@@ -11,13 +11,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .accent import read_accent_snapshot
 from .accent_theme import (
     ThemeApplyV2Backend,
     WindowsThemeApplyBackend,
-    colorization_from_snapshot,
     normalize_theme_visual_state,
     read_visual_state,
+)
+from .appearance import (
+    APPS_THEME_VALUE,
+    REG_DWORD,
+    AppsThemeReader,
+    WindowsAppearanceReader,
 )
 from .errors import DataError
 from .persistence import (
@@ -25,12 +29,6 @@ from .persistence import (
     atomic_write_json,
     captured_at,
     load_json_object,
-)
-from .theme import (
-    APPS_THEME_VALUE,
-    REG_DWORD,
-    ThemeBackend,
-    WindowsThemeBackend,
 )
 
 INSTALL_BACKUP_KIND = "themescheduler.install-backup"
@@ -317,14 +315,14 @@ def capture_install_backup(
     created_by_version: str,
     windows_build: str,
     theme_backend: ThemeApplyV2Backend | None = None,
-    app_backend: ThemeBackend | None = None,
+    app_backend: AppsThemeReader | None = None,
     colorization_reader: Callable[[], int] | None = None,
     timestamp: str | None = None,
 ) -> InstallBackup:
     """Create the immutable first-install backup from current Windows state."""
 
     active_theme = theme_backend or WindowsThemeApplyBackend()
-    registry = app_backend or WindowsThemeBackend()
+    registry = app_backend or WindowsAppearanceReader()
     source_path = active_theme.current_theme_path()
     if not source_path.is_absolute() or not source_path.is_file():
         raise InstallBackupValidationError(
@@ -334,7 +332,7 @@ def capture_install_backup(
     visual = read_visual_state(content)
     apps = registry.read_value(APPS_THEME_VALUE)
     read_colorization = colorization_reader or (
-        lambda: colorization_from_snapshot(read_accent_snapshot())
+        WindowsAppearanceReader().read_colorization_color
     )
     colorization_color = read_colorization()
     source_after = active_theme.current_theme_path()

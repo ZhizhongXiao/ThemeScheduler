@@ -15,6 +15,7 @@ from theme_scheduler.accent_theme import (
     LiveThemeApplyError,
     ThemeVisualState,
 )
+from theme_scheduler.appearance import ThemeMode
 from theme_scheduler.auto_transaction import (
     AutoTransaction,
     AutoTransactionStore,
@@ -27,14 +28,13 @@ from theme_scheduler.automation.recovery import (
     _string_key_mapping,
 )
 from theme_scheduler.config import AppConfig, ConfigStore
-from theme_scheduler.core import AutoResultKind
+from theme_scheduler.core import AutoResultKind, RunIntent
 from theme_scheduler.initial_setup import (
     create_initial_setup_marker,
 )
 from theme_scheduler.persistence import atomic_write_json
 from theme_scheduler.state import AppState, StateStore
 from theme_scheduler.storage import UserDataLayout
-from theme_scheduler.theme import ThemeMode
 
 NOW = datetime(2026, 7, 24, 8, 0, tzinfo=UTC)
 NOW_TEXT = "2026-07-24T08:00:00+00:00"
@@ -313,8 +313,7 @@ class AutoRunnerTests(unittest.TestCase):
         log: MemoryLog | None = None,
         state_store=None,
         cleanup=None,
-        force_apply: bool = False,
-        event_trigger: str = "auto",
+        intent: RunIntent = RunIntent.AUTOMATIC,
     ) -> AutoRunner:
         return AutoRunner(
             layout,
@@ -324,8 +323,7 @@ class AutoRunnerTests(unittest.TestCase):
             state_store=state_store,
             event_log=log or MemoryLog(),
             cleanup_callback=cleanup or (lambda _: None),
-            force_apply=force_apply,
-            event_trigger=event_trigger,
+            intent=intent,
         )
 
     def test_cross_profile_run_learns_applies_commits_and_logs(self) -> None:
@@ -391,7 +389,7 @@ class AutoRunnerTests(unittest.TestCase):
             self.assertEqual(windows.current.colorization_color, 0xC40078D4)
             self.assertEqual(list(layout.runtime.iterdir()), [])
 
-    def test_manual_force_sync_reapplies_same_profile_and_uses_manual_log(self) -> None:
+    def test_manual_current_reapplies_same_profile_and_uses_manual_log(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             layout = self._layout(Path(directory), state=_successful_state("day"))
             windows = self._windows()
@@ -402,8 +400,7 @@ class AutoRunnerTests(unittest.TestCase):
                 layout,
                 windows,
                 log=log,
-                force_apply=True,
-                event_trigger="manual",
+                intent=RunIntent.MANUAL_CURRENT,
             ).run()
 
             self.assertIs(outcome.result, AutoResultKind.APPLIED)
@@ -413,7 +410,7 @@ class AutoRunnerTests(unittest.TestCase):
             self.assertEqual(log.events[-1].event, "auto.applied")
             self.assertEqual(log.events[-1].trigger, "manual")
 
-    def test_manual_force_sync_cannot_bypass_pause(self) -> None:
+    def test_manual_current_bypasses_pause_without_learning(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             paused = AppState(
                 True,
@@ -430,13 +427,14 @@ class AutoRunnerTests(unittest.TestCase):
                 layout,
                 windows,
                 log=log,
-                force_apply=True,
-                event_trigger="manual",
+                intent=RunIntent.MANUAL_CURRENT,
             ).run()
 
-            self.assertIs(outcome.result, AutoResultKind.PAUSED)
-            self.assertEqual(windows.probe_count, 0)
-            self.assertEqual(windows.apply_count, 0)
+            self.assertIs(outcome.result, AutoResultKind.APPLIED)
+            self.assertEqual(windows.probe_count, 1)
+            self.assertEqual(windows.apply_count, 1)
+            self.assertEqual(windows.capture_count, 0)
+            self.assertTrue(StateStore(layout.state).load().paused)
             self.assertEqual(log.events[-1].trigger, "manual")
 
     def test_pause_busy_and_missing_state_never_touch_windows(self) -> None:

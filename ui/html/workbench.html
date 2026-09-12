@@ -171,7 +171,7 @@
               </section>
 
               <div class="settings-command-area">
-                <section class="command-bar" aria-label="保存计划"><div class="draft-summary"><span class="draft-dot"></span><span><small>配置草稿</small><strong id="draft-state" class="draft-state">与已保存配置一致</strong></span></div><div class="command-group run-actions" id="run-actions" hidden></div><button class="button button-primary" id="save-only-button" type="submit">保存</button></section>
+                <section class="command-bar" aria-label="保存计划"><div class="draft-summary"><span class="draft-dot"></span><span><small>配置草稿</small><strong id="draft-state" class="draft-state">与已保存配置一致</strong></span></div><div class="command-group run-actions" id="run-actions" hidden></div><div class="command-group"><button class="button button-secondary" id="save-only-button" type="submit">保存计划</button><button class="button button-primary" id="save-apply-button" type="submit">保存并应用当前时段</button></div></section>
               </div>
             </form>
           </section>
@@ -183,7 +183,8 @@
             <div class="maintenance-list two-columns">
               <button class="list-action" id="reset-preferences-button" type="button"><span><strong>恢复默认时间与通知</strong><small>保留昼夜应用模式选择</small></span><b>→</b></button>
               <button class="list-action" id="check-task-button" type="button"><span><strong>检查任务计划</strong><small>只读比较当前定义</small></span><b>→</b></button>
-              <button class="list-action" id="repair-task-button" type="button"><span><strong>修复任务计划</strong><small>按当前配置完整重建</small></span><b>→</b></button>
+              <button class="list-action" id="repair-task-button" type="button" data-interaction-contract="UI-013-01"><span><strong>修复任务计划</strong><small>按当前配置完整重建</small></span><b>→</b></button>
+              <button class="list-action span-two" id="repair-identity-button" type="button" data-interaction-contract="UI-013-01" hidden><span><strong>修复通知身份</strong><small id="repair-identity-hint">健康检查发现通知入口需要修复</small></span><b>→</b></button>
               <button class="list-action" data-target="logs" type="button"><span><strong>打开日志目录</strong><small>查看结构化运行记录</small></span><b>↗</b></button>
               <button class="list-action" data-target="data" type="button"><span><strong>打开数据目录</strong><small>配置、状态与颜色记录</small></span><b>↗</b></button>
               <button class="list-action" id="uninstall-button" type="button"><span><strong>启动独立卸载器</strong><small>进入保留或清理选择</small></span><b>↗</b></button>
@@ -196,7 +197,6 @@
             <section class="panel"><div class="panel-heading"><div><p class="section-index">只读诊断</p><h2>完整健康检查</h2></div><div class="diagnostic-actions"><button class="button button-secondary compact" id="check-health-button" type="button">运行检查</button><button class="button button-secondary compact" id="copy-diagnostic-button" type="button">复制摘要</button></div></div><pre class="health-report" id="health-report">尚未运行健康检查。</pre></section>
             <section class="panel recent-log-panel"><div class="panel-heading"><div><p class="section-index">最近事件</p><h2>结构化日志摘要</h2></div></div><pre class="health-report" id="recent-log-report">尚未读取。</pre></section>
           </div>
-          <details class="panel raw-details"><summary>高级修复：通知身份</summary><p class="hint">仅在通知点击、AUMID 或安全 URI 协议出现漂移时使用；执行前仍会单独确认。</p><button class="button button-secondary full-width" id="repair-identity-button" type="button">修复通知身份</button></details>
           <details class="panel raw-details"><summary>查看任务定义</summary><pre class="health-report" id="task-report">尚未读取。</pre></details>
           <details class="panel raw-details"><summary>查看状态与昼夜 profile</summary><pre class="health-report" id="state-profile-report">尚未读取。</pre></details>
           <details class="panel raw-details"><summary>查看当前 overview 原始数据</summary><pre class="health-report" id="overview-report">尚未读取。</pre></details>
@@ -213,7 +213,14 @@
       <p class="hint centered">悬浮环段或指针查看详情，双击表盘或按 Esc 缩回。</p>
     </section>
 
-    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <dialog id="confirmation-dialog" class="confirmation-dialog" aria-labelledby="confirmation-title" aria-describedby="confirmation-message" data-interaction-contract="UI-013-01">
+      <form method="dialog" class="confirmation-card">
+        <div class="confirmation-mark" aria-hidden="true">?</div>
+        <div class="confirmation-copy"><p class="section-index">请确认操作</p><h2 id="confirmation-title">确认继续？</h2><p id="confirmation-message"></p></div>
+        <div class="confirmation-actions"><button class="button button-secondary" id="confirmation-cancel" type="submit" value="cancel">取消</button><button class="button button-primary" id="confirmation-accept" type="submit" value="confirm">确认</button></div>
+      </form>
+    </dialog>
+    <div id="toast" class="toast" role="status" aria-live="polite" data-feedback-contract="UI-013-02"><strong class="toast-message"></strong></div>
     <script src="../js/brand.js"></script>
     <script src="../js/api_contracts.js"></script>
     <script src="../js/time_math.js"></script>

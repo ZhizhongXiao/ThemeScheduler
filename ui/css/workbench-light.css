@@ -220,11 +220,16 @@
   }
   .toast {
     border-color: #cbd5e1;
+    border-left-color: #16a34a;
     background: #ffffff;
     box-shadow: 0 16px 40px rgba(30, 64, 175, 0.16);
     color: #0f172a;
   }
-  .toast.is-error { border-color: rgba(185, 28, 28, 0.45); }
+  .toast-message { color: #0f172a; }
+  .toast.is-error {
+    border-color: rgba(185, 28, 28, 0.45);
+    border-left-color: #dc2626;
+  }
   .binary-toggle {
     border-color: #cbd5e1;
     background: #f8fafc;

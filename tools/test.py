@@ -105,9 +105,9 @@ GROUPS: dict[str, dict[str, tuple[str, ...]]] = {
         ),
     },
     "theme": {
-        "quick": ("test_theme.py", "test_accent*.py"),
+        "quick": ("test_appearance.py", "test_accent*.py"),
         "affected": (
-            "test_theme.py",
+            "test_appearance.py",
             "test_accent*.py",
             "test_auto*.py",
             "test_maintenance*.py",

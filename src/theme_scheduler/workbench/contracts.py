@@ -21,6 +21,7 @@ from ..config import AppConfig
 from ..core import Clock, ExecutionLock
 from ..health_service import HealthService
 from ..maintenance_service import MaintenanceService
+from ..manual_appearance_service import ManualAppearanceService
 from ..notification_identity_service import (
     NotificationIdentityRepairService,
 )
@@ -42,6 +43,10 @@ class HealthServiceFactory(Protocol):
 
 class IdentityRepairServiceFactory(Protocol):
     def __call__(self) -> NotificationIdentityRepairService: ...
+
+
+class ManualAppearanceServiceFactory(Protocol):
+    def __call__(self) -> ManualAppearanceService: ...
 
 
 class CurrentAppearanceReader(Protocol):
@@ -177,6 +182,7 @@ class WorkbenchBindings:
     _maintenance_service_factory: MaintenanceServiceFactory | None
     _health_service_factory: HealthServiceFactory | None
     _identity_repair_service_factory: IdentityRepairServiceFactory | None
+    _manual_appearance_service_factory: ManualAppearanceServiceFactory | None
     _current_appearance_reader: CurrentAppearanceReader | None
     _shell: ShellOpener
     _clock: Clock

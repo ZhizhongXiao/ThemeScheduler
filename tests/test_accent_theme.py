@@ -1,0 +1,153 @@
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+from uuid import UUID
+
+from tests._accent_theme_support import ScriptedThemeApplyV2Backend
+from theme_scheduler.accent_theme import (
+    LiveThemeApplyError,
+    ThemeFileError,
+    apply_and_verify_theme_v2,
+    build_managed_theme,
+    normalize_theme_visual_state,
+    read_visual_state,
+    resolve_current_theme_path,
+    write_new_bytes,
+)
+
+
+def theme_bytes(color: str = "0XC4FFB900") -> bytes:
+    return (
+        b"[Theme]\r\n"
+        b"DisplayName=Original\r\n"
+        b"ThemeId={65CC0448-76B8-4EB2-ADF7-D3186669AAC9}\r\n\r\n"
+        b"[VisualStyles]\r\n"
+        b"AutoColorization=0\r\n"
+        + f"ColorizationColor={color}\r\n".encode("ascii")
+        + b"SystemMode=Dark\r\n"
+        b"AppMode=Dark\r\n\r\n"
+        b"[Sounds]\r\nSchemeName=Default\r\n"
+    )
+
+
+class ManagedThemeFileTests(unittest.TestCase):
+    def test_build_combines_app_mode_and_color_without_changing_system_mode(
+        self,
+    ) -> None:
+        managed = build_managed_theme(
+            theme_bytes(),
+            0xC4744DA9,
+            app_mode="Light",
+            theme_id=UUID("11111111-2222-3333-4444-555555555555"),
+        )
+        self.assertEqual(managed.before.app_mode, "Dark")
+        self.assertEqual(managed.after.app_mode, "Light")
+        self.assertEqual(managed.after.system_mode, "Dark")
+        self.assertEqual(managed.after.colorization_color, 0xC4744DA9)
+
+    def test_normalize_preserves_theme_identity(self) -> None:
+        normalized = normalize_theme_visual_state(
+            theme_bytes(),
+            0xC4744DA9,
+            auto_colorization=True,
+            app_mode="Light",
+        )
+        self.assertIn(b"DisplayName=Original", normalized)
+        self.assertIn(b"ThemeId={65CC0448-76B8-4EB2-ADF7-D3186669AAC9}", normalized)
+        self.assertEqual(read_visual_state(normalized).auto_colorization, "1")
+
+    def test_invalid_app_mode_and_duplicate_value_are_rejected(self) -> None:
+        with self.assertRaisesRegex(ThemeFileError, "AppMode"):
+            build_managed_theme(theme_bytes(), 0xC4744DA9, app_mode="Automatic")
+        duplicate = theme_bytes().replace(
+            b"AutoColorization=0\r\n",
+            b"AutoColorization=0\r\nAutoColorization=1\r\n",
+        )
+        with self.assertRaisesRegex(ThemeFileError, "exactly one"):
+            read_visual_state(duplicate)
+
+    def test_fallback_path_and_exclusive_write_contract(self) -> None:
+        self.assertEqual(
+            resolve_current_theme_path(None, r"C:\Users\tester\AppData\Local"),
+            Path(
+                r"C:\Users\tester\AppData\Local\Microsoft\Windows\Themes\Custom.theme"
+            ),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "managed.theme"
+            write_new_bytes(target, b"first")
+            with self.assertRaisesRegex(ThemeFileError, "Refusing to overwrite"):
+                write_new_bytes(target, b"second")
+
+
+class ManagedThemeApplyTests(unittest.TestCase):
+    def _fixture(
+        self, root: Path
+    ) -> tuple[Path, Path, object, ScriptedThemeApplyV2Backend]:
+        backup = root / "before.theme"
+        target = root / "managed.theme"
+        backup.write_bytes(theme_bytes())
+        managed = build_managed_theme(
+            backup.read_bytes(),
+            0xC4744DA9,
+            app_mode="Light",
+        )
+        target.write_bytes(managed.content)
+        return backup, target, managed, ScriptedThemeApplyV2Backend(backup, target)
+
+    def test_success_verifies_visual_state_and_index(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            _backup, target, managed, backend = self._fixture(Path(directory))
+            result = apply_and_verify_theme_v2(
+                target,
+                managed.after,
+                managed.before,
+                backend=backend,
+                settle_seconds=0,
+            )
+        self.assertEqual(result.actual.app_mode, "Light")
+        self.assertEqual(result.index_after, 13)
+
+    def test_visual_failure_restores_original_index(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            backup, target, managed, backend = self._fixture(Path(directory))
+            backend.apply_active_paths.append(backup)
+            with self.assertRaises(LiveThemeApplyError) as caught:
+                apply_and_verify_theme_v2(
+                    target,
+                    managed.after,
+                    managed.before,
+                    backend=backend,
+                    settle_seconds=0,
+                )
+        self.assertTrue(caught.exception.rollback_succeeded)
+        self.assertIn(("set_v2_index", 6), backend.calls)
+
+    def test_backup_fallback_runs_when_index_restore_is_insufficient(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            backup, target, managed, backend = self._fixture(root)
+            wrong = root / "wrong.theme"
+            wrong.write_bytes(theme_bytes("0XC40078D4"))
+            backend.apply_active_paths.append(wrong)
+            backend.restore_original_on_set = False
+            with self.assertRaises(LiveThemeApplyError) as caught:
+                apply_and_verify_theme_v2(
+                    target,
+                    managed.after,
+                    managed.before,
+                    rollback_path=backup,
+                    backend=backend,
+                    settle_seconds=0,
+                )
+        self.assertTrue(caught.exception.rollback_succeeded)
+        self.assertEqual(
+            [call[0] for call in backend.calls].count("apply_theme_v2"),
+            2,
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()
