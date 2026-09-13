@@ -36,6 +36,12 @@ class GuiApi(
         "nightStart",
         "dayAppsTheme",
         "nightAppsTheme",
+        "daySystemTheme",
+        "nightSystemTheme",
+        "dayStartTaskbarAccent",
+        "nightStartTaskbarAccent",
+        "dayTitleBordersAccent",
+        "nightTitleBordersAccent",
         "notifyErrors",
         "notifyStatusChanges",
     }

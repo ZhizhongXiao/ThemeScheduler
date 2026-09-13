@@ -56,7 +56,7 @@
           <section class="plan-view is-active" id="plan-overview-view" data-plan-view="overview">
             <section class="initial-setup-banner" id="initial-setup-banner" aria-live="polite" hidden>
               <span class="initial-setup-icon">1</span>
-              <div><h2>完成首次设置</h2><p>确认昼夜时间、应用模式和颜色后保存，计划才会启用；不会立即改变 Windows 外观。</p></div>
+              <div><h2>完成首次设置</h2><p>确认昼夜时间、两种模式、颜色及显示位置后保存，计划才会启用；不会立即改变 Windows 外观。</p></div>
               <button class="button button-primary" id="initial-setup-button" type="button">设置计划</button>
             </section>
 
@@ -141,7 +141,7 @@
                 </div>
 
                 <article class="boundary-detail is-active" id="boundary-panel-day" role="tabpanel" aria-labelledby="boundary-tab-day" data-boundary-panel="day" data-color-editor="day">
-                  <div class="detail-time-mode"><label>昼间开始<input id="day-start" type="time" step="300" required aria-describedby="time-editor-help"></label><div class="mode-setting"><span>应用模式</span><select class="visually-hidden" id="day-theme" aria-label="昼间应用模式" tabindex="-1"><option value="light">浅色</option><option value="dark">深色</option></select><button class="binary-toggle theme-mode-toggle" type="button" role="switch" aria-checked="false" data-theme-toggle="day" aria-label="昼间应用模式为浅色；点击切换至深色"><span>浅色</span><span>深色</span><i aria-hidden="true"></i></button></div></div>
+                  <div class="detail-time-mode"><label>昼间开始<input id="day-start" type="time" step="300" required aria-describedby="time-editor-help"></label><div class="appearance-mode-stack"><div class="mode-setting"><span>Windows 模式</span><select class="visually-hidden" id="day-system-theme" aria-label="昼间 Windows 模式" tabindex="-1"><option value="">保持当前</option><option value="light">浅色</option><option value="dark">深色</option></select><button class="binary-toggle theme-mode-toggle" type="button" role="switch" aria-checked="false" data-mode-toggle="system" data-profile="day" aria-label="昼间 Windows 模式为浅色；点击切换至深色"><span>浅色</span><span>深色</span><i aria-hidden="true"></i></button></div><div class="mode-setting"><span>应用模式</span><select class="visually-hidden" id="day-theme" aria-label="昼间应用模式" tabindex="-1"><option value="light">浅色</option><option value="dark">深色</option></select><button class="binary-toggle theme-mode-toggle" type="button" role="switch" aria-checked="false" data-mode-toggle="apps" data-profile="day" aria-label="昼间应用模式为浅色；点击切换至深色"><span>浅色</span><span>深色</span><i aria-hidden="true"></i></button></div></div></div>
                   <p class="visually-hidden" id="time-editor-help">拖动时针或分针；分钟固定为 5 分钟步进。</p>
                   <div class="appearance-card-body">
                     <div class="color-preview-panel" data-color-preview role="img"></div>
@@ -150,11 +150,12 @@
                       <label>R<input id="day-color-red" data-color-channel="red" type="number" inputmode="numeric" min="0" max="255" step="1"></label><label>G<input id="day-color-green" data-color-channel="green" type="number" inputmode="numeric" min="0" max="255" step="1"></label><label>B<input id="day-color-blue" data-color-channel="blue" type="number" inputmode="numeric" min="0" max="255" step="1"></label>
                     </div><button class="button button-secondary import-button is-safety-blocked" data-import-appearance="day" data-read-enabled="false" type="button" aria-disabled="true">导入当前 Windows 外观</button></div>
                   </div>
+                  <fieldset class="accent-surface-options"><legend>强调色显示位置</legend><label class="switch-label"><input id="day-start-taskbar-accent" type="checkbox"><span>开始菜单和任务栏</span></label><label class="switch-label"><input id="day-title-borders-accent" type="checkbox"><span>标题栏和窗口边框</span></label></fieldset>
                   <p class="color-error" data-color-error role="alert"></p><p class="import-status" data-import-status="day" aria-live="polite" hidden></p>
                 </article>
 
                 <article class="boundary-detail" id="boundary-panel-night" role="tabpanel" aria-labelledby="boundary-tab-night" data-boundary-panel="night" data-color-editor="night" hidden>
-                  <div class="detail-time-mode"><label>夜间开始<input id="night-start" type="time" step="300" required aria-describedby="time-editor-help"></label><div class="mode-setting"><span>应用模式</span><select class="visually-hidden" id="night-theme" aria-label="夜间应用模式" tabindex="-1"><option value="dark">深色</option><option value="light">浅色</option></select><button class="binary-toggle theme-mode-toggle is-second" type="button" role="switch" aria-checked="true" data-theme-toggle="night" aria-label="夜间应用模式为深色；点击切换至浅色"><span>浅色</span><span>深色</span><i aria-hidden="true"></i></button></div></div>
+                  <div class="detail-time-mode"><label>夜间开始<input id="night-start" type="time" step="300" required aria-describedby="time-editor-help"></label><div class="appearance-mode-stack"><div class="mode-setting"><span>Windows 模式</span><select class="visually-hidden" id="night-system-theme" aria-label="夜间 Windows 模式" tabindex="-1"><option value="">保持当前</option><option value="light">浅色</option><option value="dark">深色</option></select><button class="binary-toggle theme-mode-toggle is-second" type="button" role="switch" aria-checked="true" data-mode-toggle="system" data-profile="night" aria-label="夜间 Windows 模式为深色；点击切换至浅色"><span>浅色</span><span>深色</span><i aria-hidden="true"></i></button></div><div class="mode-setting"><span>应用模式</span><select class="visually-hidden" id="night-theme" aria-label="夜间应用模式" tabindex="-1"><option value="dark">深色</option><option value="light">浅色</option></select><button class="binary-toggle theme-mode-toggle is-second" type="button" role="switch" aria-checked="true" data-mode-toggle="apps" data-profile="night" aria-label="夜间应用模式为深色；点击切换至浅色"><span>浅色</span><span>深色</span><i aria-hidden="true"></i></button></div></div></div>
                   <div class="appearance-card-body">
                     <div class="color-preview-panel" data-color-preview role="img"></div>
                     <div class="appearance-editor"><div class="color-value-grid">
@@ -162,12 +163,13 @@
                       <label>R<input id="night-color-red" data-color-channel="red" type="number" inputmode="numeric" min="0" max="255" step="1"></label><label>G<input id="night-color-green" data-color-channel="green" type="number" inputmode="numeric" min="0" max="255" step="1"></label><label>B<input id="night-color-blue" data-color-channel="blue" type="number" inputmode="numeric" min="0" max="255" step="1"></label>
                     </div><button class="button button-secondary import-button is-safety-blocked" data-import-appearance="night" data-read-enabled="false" type="button" aria-disabled="true">导入当前 Windows 外观</button></div>
                   </div>
+                  <fieldset class="accent-surface-options"><legend>强调色显示位置</legend><label class="switch-label"><input id="night-start-taskbar-accent" type="checkbox"><span>开始菜单和任务栏</span></label><label class="switch-label"><input id="night-title-borders-accent" type="checkbox"><span>标题栏和窗口边框</span></label></fieldset>
                   <p class="color-error" data-color-error role="alert"></p><p class="import-status" data-import-status="night" aria-live="polite" hidden></p>
                 </article>
 
                 <div class="workspace-feedback"><p id="form-error" class="form-error" role="alert"></p><div class="workspace-result" id="workspace-result" aria-live="polite" hidden><div><span>配置与任务</span><strong id="workspace-save-result">尚未执行</strong></div></div></div>
                 <div class="settings-notifications"><label class="switch-label"><input id="notify-errors" type="checkbox"><span>错误通知</span></label><label class="switch-label"><input id="notify-status" type="checkbox"><span>状态变更通知</span></label><button class="button button-ghost compact" data-target="colors" type="button">Windows 颜色设置</button></div>
-                <p id="color-match-note" class="inline-note" hidden>昼间和夜间颜色相同；计划切换时只改变应用模式。</p>
+                <p id="color-match-note" class="inline-note" hidden>昼间和夜间颜色相同；计划仍会切换两种模式或强调色显示位置。</p>
               </section>
 
               <div class="settings-command-area">
@@ -181,7 +183,7 @@
           <section class="panel" id="maintenance">
             <div class="panel-heading"><div><p class="section-index">维护</p><h2>任务与程序入口</h2><p class="hint" id="maintenance-health-summary">健康检查尚未运行</p></div></div>
             <div class="maintenance-list two-columns">
-              <button class="list-action" id="reset-preferences-button" type="button"><span><strong>恢复默认时间与通知</strong><small>保留昼夜应用模式选择</small></span><b>→</b></button>
+              <button class="list-action" id="reset-preferences-button" type="button"><span><strong>恢复默认时间与通知</strong><small>保留昼夜外观选择</small></span><b>→</b></button>
               <button class="list-action" id="check-task-button" type="button"><span><strong>检查任务计划</strong><small>只读比较当前定义</small></span><b>→</b></button>
               <button class="list-action" id="repair-task-button" type="button" data-interaction-contract="UI-013-01"><span><strong>修复任务计划</strong><small>按当前配置完整重建</small></span><b>→</b></button>
               <button class="list-action span-two" id="repair-identity-button" type="button" data-interaction-contract="UI-013-01" hidden><span><strong>修复通知身份</strong><small id="repair-identity-hint">健康检查发现通知入口需要修复</small></span><b>→</b></button>
@@ -199,6 +201,7 @@
           </div>
           <details class="panel raw-details"><summary>查看任务定义</summary><pre class="health-report" id="task-report">尚未读取。</pre></details>
           <details class="panel raw-details"><summary>查看状态与昼夜 profile</summary><pre class="health-report" id="state-profile-report">尚未读取。</pre></details>
+          <details class="panel raw-details"><summary>查看当前 Windows 外观来源</summary><pre class="health-report" id="appearance-report">尚未读取。</pre></details>
           <details class="panel raw-details"><summary>查看当前 overview 原始数据</summary><pre class="health-report" id="overview-report">尚未读取。</pre></details>
         </section>
 

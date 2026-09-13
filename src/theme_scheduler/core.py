@@ -99,7 +99,9 @@ class AutoRunPlan:
     kind: AutoPlanKind
     target_profile: str | None
     target_apps_theme: str | None
-    learn_profile: str | None
+    target_system_theme: str | None
+    target_start_taskbar_accent: bool | None
+    target_title_borders_accent: bool | None
 
     def __post_init__(self) -> None:
         if self.kind is AutoPlanKind.PAUSED:
@@ -108,7 +110,9 @@ class AutoRunPlan:
                 for value in (
                     self.target_profile,
                     self.target_apps_theme,
-                    self.learn_profile,
+                    self.target_system_theme,
+                    self.target_start_taskbar_accent,
+                    self.target_title_borders_accent,
                 )
             ):
                 raise ValueError("A paused plan cannot contain write targets.")
@@ -117,12 +121,14 @@ class AutoRunPlan:
             raise ValueError("An apply plan requires a day or night target.")
         if self.target_apps_theme not in {"light", "dark"}:
             raise ValueError("An apply plan requires a supported app theme.")
-        if self.learn_profile not in {None, PROFILE_DAY, PROFILE_NIGHT}:
-            raise ValueError("learnProfile must be day, night, or null.")
-        if self.learn_profile == self.target_profile:
-            raise ValueError("The target profile must never learn from itself.")
-        if self.kind is AutoPlanKind.NO_CHANGE and self.learn_profile is not None:
-            raise ValueError("A no-change plan cannot learn a profile.")
+        if self.target_system_theme not in {None, "light", "dark"}:
+            raise ValueError("An apply plan contains an unsupported system theme.")
+        for value in (
+            self.target_start_taskbar_accent,
+            self.target_title_borders_accent,
+        ):
+            if value is not None and not isinstance(value, bool):
+                raise ValueError("Accent-surface targets must be boolean or null.")
 
 
 def _wall_time(value: str) -> time:
@@ -150,18 +156,6 @@ def target_profile_at(config: AppConfig, now: datetime) -> str:
     return PROFILE_DAY if is_day else PROFILE_NIGHT
 
 
-def learning_source(state: AppState, target_profile: str) -> str | None:
-    """Return a trustworthy departing profile, or conservatively skip learning."""
-
-    if target_profile not in {PROFILE_DAY, PROFILE_NIGHT}:
-        raise ValueError("Target profile must be day or night.")
-    if state.last_result != "success":
-        return None
-    if state.active_profile is None or state.active_profile == target_profile:
-        return None
-    return state.active_profile
-
-
 def plan_auto_run(
     config: AppConfig,
     state: AppState,
@@ -174,11 +168,14 @@ def plan_auto_run(
     if not isinstance(intent, RunIntent):
         raise ValueError("intent must be a RunIntent.")
     if state.paused and intent is RunIntent.AUTOMATIC:
-        return AutoRunPlan(AutoPlanKind.PAUSED, None, None, None)
+        return AutoRunPlan(AutoPlanKind.PAUSED, None, None, None, None, None)
     target = target_profile_at(config, now)
-    apps_theme = (
-        config.day_apps_theme if target == PROFILE_DAY else config.night_apps_theme
-    )
+    (
+        apps_theme,
+        system_theme,
+        start_taskbar_accent,
+        title_borders_accent,
+    ) = config.profile_appearance(target)
     if (
         intent is RunIntent.AUTOMATIC
         and state.last_result == "success"
@@ -188,13 +185,17 @@ def plan_auto_run(
             AutoPlanKind.NO_CHANGE,
             target,
             apps_theme,
-            None,
+            system_theme,
+            start_taskbar_accent,
+            title_borders_accent,
         )
     return AutoRunPlan(
         AutoPlanKind.APPLY,
         target,
         apps_theme,
-        (learning_source(state, target) if intent is RunIntent.AUTOMATIC else None),
+        system_theme,
+        start_taskbar_accent,
+        title_borders_accent,
     )
 
 

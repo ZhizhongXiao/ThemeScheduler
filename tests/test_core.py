@@ -12,7 +12,6 @@ from theme_scheduler.core import (
     AutoPlanKind,
     AutoResultKind,
     RunIntent,
-    learning_source,
     mutex_name_for_data_root,
     plan_auto_run,
     target_profile_at,
@@ -64,26 +63,7 @@ class TimeDecisionTests(unittest.TestCase):
             target_profile_at(AppConfig.defaults(), datetime(2026, 7, 24, 6, 15))
 
 
-class LearningDecisionTests(unittest.TestCase):
-    def test_only_successful_departing_profile_can_be_learned(self) -> None:
-        self.assertEqual(learning_source(_successful_state("night"), "day"), "night")
-        self.assertIsNone(learning_source(_successful_state("day"), "day"))
-
-        for result in ("never", "failed", "partial"):
-            state = (
-                AppState.initial()
-                if result == "never"
-                else AppState(
-                    False,
-                    "night",
-                    "2026-07-24T06:15:00+08:00",
-                    None,
-                    result,
-                )
-            )
-            with self.subTest(result=result):
-                self.assertIsNone(learning_source(state, "day"))
-
+class ExplicitPlanDecisionTests(unittest.TestCase):
     def test_paused_plan_contains_no_write_targets(self) -> None:
         state = AppState(
             True,
@@ -98,9 +78,11 @@ class LearningDecisionTests(unittest.TestCase):
         self.assertIs(plan.kind, AutoPlanKind.PAUSED)
         self.assertIsNone(plan.target_profile)
         self.assertIsNone(plan.target_apps_theme)
-        self.assertIsNone(plan.learn_profile)
+        self.assertIsNone(plan.target_system_theme)
+        self.assertIsNone(plan.target_start_taskbar_accent)
+        self.assertIsNone(plan.target_title_borders_accent)
 
-    def test_apply_plan_combines_target_mode_and_learning_source(self) -> None:
+    def test_apply_plan_contains_complete_explicit_appearance(self) -> None:
         plan = plan_auto_run(
             AppConfig.defaults(), _successful_state("night"), _at(8, 0)
         )
@@ -108,7 +90,9 @@ class LearningDecisionTests(unittest.TestCase):
         self.assertIs(plan.kind, AutoPlanKind.APPLY)
         self.assertEqual(plan.target_profile, "day")
         self.assertEqual(plan.target_apps_theme, "light")
-        self.assertEqual(plan.learn_profile, "night")
+        self.assertEqual(plan.target_system_theme, "light")
+        self.assertFalse(plan.target_start_taskbar_accent)
+        self.assertFalse(plan.target_title_borders_accent)
 
     def test_successful_same_profile_is_no_change_and_does_not_learn(self) -> None:
         plan = plan_auto_run(AppConfig.defaults(), _successful_state("day"), _at(8, 0))
@@ -116,7 +100,7 @@ class LearningDecisionTests(unittest.TestCase):
         self.assertIs(plan.kind, AutoPlanKind.NO_CHANGE)
         self.assertEqual(plan.target_profile, "day")
         self.assertEqual(plan.target_apps_theme, "light")
-        self.assertIsNone(plan.learn_profile)
+        self.assertEqual(plan.target_system_theme, "light")
 
     def test_manual_current_plan_applies_without_learning_or_pause_block(self) -> None:
         plan = plan_auto_run(
@@ -129,7 +113,6 @@ class LearningDecisionTests(unittest.TestCase):
         self.assertIs(plan.kind, AutoPlanKind.APPLY)
         self.assertEqual(plan.target_profile, "day")
         self.assertEqual(plan.target_apps_theme, "light")
-        self.assertIsNone(plan.learn_profile)
 
         paused = AppState(
             True,

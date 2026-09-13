@@ -185,6 +185,7 @@ def normalize_theme_visual_state(
     *,
     auto_colorization: bool,
     app_mode: str,
+    system_mode: str | None = None,
 ) -> bytes:
     """Create a semantic recovery copy without changing theme identity."""
 
@@ -198,6 +199,8 @@ def normalize_theme_visual_state(
         raise ThemeFileError("AutoColorization must be boolean.")
     if app_mode not in {"Light", "Dark"}:
         raise ThemeFileError("AppMode must be Light or Dark.")
+    if system_mode not in {None, "Light", "Dark"}:
+        raise ThemeFileError("SystemMode must be Light, Dark, or omitted.")
     before = read_visual_state(source)
     content = _replace_value(
         source,
@@ -217,12 +220,20 @@ def normalize_theme_visual_state(
         "AppMode",
         app_mode,
     )
+    if system_mode is not None:
+        content = _replace_value(
+            content,
+            "VisualStyles",
+            "SystemMode",
+            system_mode,
+        )
     after = read_visual_state(content)
+    expected_system_mode = system_mode or before.system_mode
     if (
         after.auto_colorization != ("1" if auto_colorization else "0")
         or after.colorization_color != colorization_color
         or after.app_mode != app_mode
-        or after.system_mode != before.system_mode
+        or after.system_mode != expected_system_mode
     ):
         raise ThemeFileError(
             "Normalized recovery theme did not match semantic targets."
@@ -236,6 +247,7 @@ def build_managed_theme(
     *,
     auto_colorization: bool = False,
     app_mode: str | None = None,
+    system_mode: str | None = None,
     theme_id: UUID | None = None,
     display_name: str = "ThemeScheduler Accent Prototype",
 ) -> ManagedTheme:
@@ -248,6 +260,8 @@ def build_managed_theme(
         raise ThemeFileError("AutoColorization must be boolean.")
     if app_mode not in {None, "Light", "Dark"}:
         raise ThemeFileError("AppMode must be Light, Dark, or omitted.")
+    if system_mode not in {None, "Light", "Dark"}:
+        raise ThemeFileError("SystemMode must be Light, Dark, or omitted.")
     before = read_visual_state(source)
     identifier = theme_id or uuid4()
     content = _replace_value(source, "Theme", "DisplayName", display_name)
@@ -268,12 +282,15 @@ def build_managed_theme(
     )
     if app_mode is not None:
         content = _replace_value(content, "VisualStyles", "AppMode", app_mode)
+    if system_mode is not None:
+        content = _replace_value(content, "VisualStyles", "SystemMode", system_mode)
     after = read_visual_state(content)
     expected_app_mode = app_mode or before.app_mode
+    expected_system_mode = system_mode or before.system_mode
     if after.app_mode != expected_app_mode:
         raise ThemeFileError("Managed theme AppMode did not match the target.")
-    if after.system_mode != before.system_mode:
-        raise ThemeFileError("Managed theme unexpectedly changed SystemMode.")
+    if after.system_mode != expected_system_mode:
+        raise ThemeFileError("Managed theme SystemMode did not match the target.")
     return ManagedTheme(content, identifier, before, after)
 
 
@@ -483,8 +500,6 @@ def _read_active_visual_state(
 def _visual_state_failures(
     actual: ThemeVisualState,
     expected: ThemeVisualState,
-    *,
-    preserved_system_mode: str,
 ) -> tuple[str, ...]:
     failures: list[str] = []
     if actual.auto_colorization != expected.auto_colorization:
@@ -493,8 +508,8 @@ def _visual_state_failures(
         failures.append("Active theme ColorizationColor did not match the target.")
     if actual.app_mode != expected.app_mode:
         failures.append("Active theme AppMode did not match the target.")
-    if actual.system_mode != preserved_system_mode:
-        failures.append("Theme apply changed SystemMode.")
+    if actual.system_mode != expected.system_mode:
+        failures.append("Active theme SystemMode did not match the target.")
     return tuple(failures)
 
 
@@ -538,7 +553,6 @@ def _try_restore_original_index(
         return not _visual_state_failures(
             actual,
             before,
-            preserved_system_mode=before.system_mode,
         )
     except Exception:
         return False
@@ -558,7 +572,6 @@ def _try_restore_theme_backup(
         return not _visual_state_failures(
             actual,
             before,
-            preserved_system_mode=before.system_mode,
         )
     except Exception:
         return False
@@ -615,7 +628,6 @@ def apply_and_verify_theme_v2(
         failures = _visual_state_failures(
             actual,
             expected,
-            preserved_system_mode=before.system_mode,
         )
         if failures:
             raise ThemeFileError(failures[0])

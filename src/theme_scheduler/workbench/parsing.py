@@ -38,6 +38,12 @@ class GuiParsingMixin(WorkbenchBindings):
             night_start=payload.get("nightStart"),  # type: ignore[arg-type]
             day_apps_theme=payload.get("dayAppsTheme"),  # type: ignore[arg-type]
             night_apps_theme=payload.get("nightAppsTheme"),  # type: ignore[arg-type]
+            day_system_theme=payload.get("daySystemTheme"),
+            night_system_theme=payload.get("nightSystemTheme"),
+            day_start_taskbar_accent=payload.get("dayStartTaskbarAccent"),
+            night_start_taskbar_accent=payload.get("nightStartTaskbarAccent"),
+            day_title_borders_accent=payload.get("dayTitleBordersAccent"),
+            night_title_borders_accent=payload.get("nightTitleBordersAccent"),
             notify_errors=payload.get("notifyErrors"),  # type: ignore[arg-type]
             notify_status_changes=payload.get(  # type: ignore[arg-type]
                 "notifyStatusChanges"
@@ -102,6 +108,12 @@ class GuiParsingMixin(WorkbenchBindings):
             nightStart=config.night_start,
             dayAppsTheme=config.day_apps_theme,
             nightAppsTheme=config.night_apps_theme,
+            daySystemTheme=config.day_system_theme,
+            nightSystemTheme=config.night_system_theme,
+            dayStartTaskbarAccent=config.day_start_taskbar_accent,
+            nightStartTaskbarAccent=config.night_start_taskbar_accent,
+            dayTitleBordersAccent=config.day_title_borders_accent,
+            nightTitleBordersAccent=config.night_title_borders_accent,
             notifyErrors=config.notify_errors,
             notifyStatusChanges=config.notify_status_changes,
         )

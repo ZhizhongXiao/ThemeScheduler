@@ -142,6 +142,12 @@ function cloneConfig(config) {
     nightStart: config.nightStart,
     dayAppsTheme: config.dayAppsTheme,
     nightAppsTheme: config.nightAppsTheme,
+    daySystemTheme: config.daySystemTheme,
+    nightSystemTheme: config.nightSystemTheme,
+    dayStartTaskbarAccent: config.dayStartTaskbarAccent,
+    nightStartTaskbarAccent: config.nightStartTaskbarAccent,
+    dayTitleBordersAccent: config.dayTitleBordersAccent,
+    nightTitleBordersAccent: config.nightTitleBordersAccent,
     notifyErrors: config.notifyErrors,
     notifyStatusChanges: config.notifyStatusChanges,
   };
@@ -277,6 +283,12 @@ function configPayload() {
     nightStart: $("#night-start").value,
     dayAppsTheme: $("#day-theme").value,
     nightAppsTheme: $("#night-theme").value,
+    daySystemTheme: $("#day-system-theme").value || null,
+    nightSystemTheme: $("#night-system-theme").value || null,
+    dayStartTaskbarAccent: $("#day-start-taskbar-accent").checked,
+    nightStartTaskbarAccent: $("#night-start-taskbar-accent").checked,
+    dayTitleBordersAccent: $("#day-title-borders-accent").checked,
+    nightTitleBordersAccent: $("#night-title-borders-accent").checked,
     notifyErrors: $("#notify-errors").checked,
     notifyStatusChanges: $("#notify-status").checked,
   };
@@ -387,11 +399,34 @@ function renderDraft() {
   $("#day-theme").value = state.draft.dayAppsTheme;
   $("#night-theme").value = state.draft.nightAppsTheme;
   for (const name of ["day", "night"]) {
-    const dark = state.draft[`${name}AppsTheme`] === "dark";
-    const toggle = $(`[data-theme-toggle="${name}"]`);
-    toggle.classList.toggle("is-second", dark);
-    toggle.setAttribute("aria-checked", String(dark));
-    toggle.setAttribute("aria-label", `${name === "day" ? "昼间" : "夜间"}应用模式为${dark ? "深色" : "浅色"}；点击切换至${dark ? "浅色" : "深色"}`);
+    const label = name === "day" ? "昼间" : "夜间";
+    for (const [kind, key, title] of [
+      ["apps", `${name}AppsTheme`, "应用模式"],
+      ["system", `${name}SystemTheme`, "Windows 模式"],
+    ]) {
+      const value = state.draft[key];
+      const dark = value === "dark";
+      const unset = value === null;
+      const toggle = $(`[data-mode-toggle="${kind}"][data-profile="${name}"]`);
+      toggle.classList.toggle("is-second", dark);
+      toggle.classList.toggle("is-unset", unset);
+      toggle.setAttribute("aria-checked", String(dark));
+      toggle.setAttribute(
+        "aria-label",
+        unset
+          ? `${label}${title}沿用旧版行为；点击设为浅色`
+          : `${label}${title}为${dark ? "深色" : "浅色"}；点击切换至${dark ? "浅色" : "深色"}`,
+      );
+    }
+    $("#" + name + "-system-theme").value = state.draft[`${name}SystemTheme`] || "";
+    for (const [suffix, key] of [
+      ["start-taskbar-accent", `${name}StartTaskbarAccent`],
+      ["title-borders-accent", `${name}TitleBordersAccent`],
+    ]) {
+      const control = $(`#${name}-${suffix}`);
+      control.checked = state.draft[key] === true;
+      control.indeterminate = state.draft[key] === null;
+    }
   }
   $("#notify-errors").checked = state.draft.notifyErrors;
   $("#notify-status").checked = state.draft.notifyStatusChanges;
@@ -454,7 +489,7 @@ function renderRecentLog(summary) {
 function diagnosticSummary() {
   const data = state.overview;
   if (!data) return "ThemeScheduler：状态尚未读取。";
-  return [
+  const lines = [
     "ThemeScheduler 诊断摘要",
     `读取时间：${data.now}`,
     `核心状态：${data.result}`,
@@ -463,7 +498,31 @@ function diagnosticSummary() {
     `任务定义：${data.task?.valid ? "正常" : "需检查"}`,
     `昼间 profile：${data.profiles?.day?.valid ? "有效" : "无效"}`,
     `夜间 profile：${data.profiles?.night?.valid ? "有效" : "无效"}`,
-  ].join("\n");
+  ];
+  const appearance = state.currentAppearance;
+  if (appearance) {
+    const divergenceLabels = {
+      "active-theme-unavailable": "活动主题不可读",
+      "app-mode": "应用模式",
+      "system-mode": "系统模式",
+      "auto-colorization": "自动取色",
+      "accent-color": "强调色",
+    };
+    lines.push(
+      `当前外观来源：${appearance.accentSource}`,
+      `活动主题与实时状态：${appearance.sourcesDiverged ? "存在差异" : "一致"}`,
+    );
+    if (appearance.sourcesDiverged) {
+      lines.push(
+        `差异字段：${appearance.divergences
+          .map((item) => divergenceLabels[item] || item)
+          .join("、")}`,
+      );
+    }
+  } else {
+    lines.push("当前外观来源：不可用");
+  }
+  return lines.join("\n");
 }
 
 function renderSwatch(selector, color) {
@@ -476,9 +535,15 @@ function renderSwatch(selector, color) {
 function renderPlanProfiles(data) {
   for (const name of ["day", "night"]) {
     const profile = data.profiles?.[name];
-    const mode = data.config?.[`${name}AppsTheme`] === "light" ? "浅色" : "深色";
+    const appsMode = data.config?.[`${name}AppsTheme`] === "light" ? "应用浅色" : "应用深色";
+    const systemValue = data.config?.[`${name}SystemTheme`];
+    const systemMode = systemValue === "light"
+      ? "Windows 浅色"
+      : systemValue === "dark"
+        ? "Windows 深色"
+        : "Windows 沿用";
     const color = profile?.valid ? profile.color : null;
-    setText(`#overview-${name}-mode`, mode);
+    setText(`#overview-${name}-mode`, `${systemMode} · ${appsMode}`);
     setText(`#overview-${name}-color`, color?.hex || "颜色不可用");
     renderSwatch(`#overview-${name}-swatch`, color);
   }
@@ -487,15 +552,42 @@ function renderPlanProfiles(data) {
 function renderCurrentAppearance(result) {
   const available = result?.result === "success" && result.color?.hex;
   state.currentAppearance = available ? result : null;
+  if (available && state.draft) {
+    let hydrated = false;
+    for (const name of ["day", "night"]) {
+      for (const [key, value] of [
+        [`${name}SystemTheme`, result.systemMode],
+        [`${name}StartTaskbarAccent`, result.startTaskbarAccent],
+        [`${name}TitleBordersAccent`, result.titleBordersAccent],
+      ]) {
+        if (state.draft[key] === null) {
+          state.draft[key] = value;
+          hydrated = true;
+        }
+      }
+    }
+    if (hydrated) {
+      renderDraft();
+      markDraftState();
+    }
+  }
+  setText(
+    "#appearance-report",
+    available
+      ? JSON.stringify(result, null, 2)
+      : "当前启动方式未启用系统外观读取，或读取失败。",
+  );
   setText("#current-appearance-state", available ? "已读取" : "不可用");
   setText(
     "#current-appearance-mode",
-    available ? (result.appMode === "light" ? "浅色应用" : "深色应用") : "暂不可读取",
+    available
+      ? `${result.systemMode === "light" ? "浅色" : "深色"} Windows · ${result.appMode === "light" ? "浅色" : "深色"}应用`
+      : "暂不可读取",
   );
   setText("#current-appearance-color", available ? result.color.hex : "—");
   setText(
     "#current-appearance-note",
-    available ? "实际应用模式与强调色" : "当前启动方式未启用系统外观读取",
+    available ? "实际模式、强调色与显示位置" : "当前启动方式未启用系统外观读取",
   );
   renderSwatch("#current-appearance-swatch", available ? result.color : null);
 }
@@ -630,7 +722,7 @@ function renderOverview(data, options = {}) {
     button.classList.toggle("is-safety-blocked", !enabled);
     button.disabled = state.busy;
     button.title = enabled
-      ? "读取当前应用模式和强调色到该时段草稿"
+      ? "读取当前完整 Windows 外观到该时段草稿"
       : "隔离安全预览不会读取真实 Windows 外观";
     const profile = button.dataset.importAppearance;
     const status = $(`[data-import-status="${profile}"]`);
@@ -746,6 +838,23 @@ function validateFiveMinuteDraft() {
   }
   if (state.draft.dayStart === state.draft.nightStart) {
     return "昼间和夜间的开始时间不能相同。";
+  }
+  return "";
+}
+
+function validateCompleteAppearanceDraft() {
+  for (const [name, label] of [["day", "昼间"], ["night", "夜间"]]) {
+    if (!["light", "dark"].includes(state.draft?.[`${name}SystemTheme`])) {
+      return `请先设置${label} Windows 模式。`;
+    }
+    for (const [key, description] of [
+      [`${name}StartTaskbarAccent`, "开始菜单和任务栏强调色"],
+      [`${name}TitleBordersAccent`, "标题栏和窗口边框强调色"],
+    ]) {
+      if (typeof state.draft?.[key] !== "boolean") {
+        return `请先设置${label}${description}。`;
+      }
+    }
   }
   return "";
 }
@@ -914,12 +1023,25 @@ $("#meridiem-toggle").addEventListener("click", () => {
       renderTimeDraft();
     }
   });
-  $(`[data-theme-toggle="${name}"]`).addEventListener("click", () => {
-    const key = `${name}AppsTheme`;
-    const value = state.draft[key] === "dark" ? "light" : "dark";
-    $(`#${name}-theme`).value = value;
-    updateDraftValue(key, value);
-  });
+  for (const [kind, key, selectId] of [
+    ["apps", `${name}AppsTheme`, `${name}-theme`],
+    ["system", `${name}SystemTheme`, `${name}-system-theme`],
+  ]) {
+    $(`[data-mode-toggle="${kind}"][data-profile="${name}"]`).addEventListener("click", () => {
+      const value = state.draft[key] === "dark" ? "light" : "dark";
+      $(`#${selectId}`).value = value;
+      updateDraftValue(key, value);
+    });
+  }
+  for (const [suffix, key] of [
+    ["start-taskbar-accent", `${name}StartTaskbarAccent`],
+    ["title-borders-accent", `${name}TitleBordersAccent`],
+  ]) {
+    $(`#${name}-${suffix}`).addEventListener("change", (event) => {
+      event.target.indeterminate = false;
+      updateDraftValue(key, event.target.checked);
+    });
+  }
 });
 
 $("#notify-errors").addEventListener("change", (event) => {
@@ -936,6 +1058,12 @@ async function submitWorkspace(applyCurrent = false) {
     setText("#form-error", localError);
     return null;
   }
+  const appearanceError = validateCompleteAppearanceDraft();
+  if (appearanceError) {
+    setText("#form-error", appearanceError);
+    activatePage("plan", { planView: "settings" });
+    return null;
+  }
   if (!state.draftColors?.day || !state.draftColors?.night) {
     setText("#form-error", "昼夜颜色记录必须完整且有效。");
     activatePage("plan", { planView: "settings" });
@@ -947,7 +1075,7 @@ async function submitWorkspace(applyCurrent = false) {
     return null;
   }
   if (applyCurrent && !await requestConfirmation(
-    "将先保存完整计划，再立即切换为当前时段的应用模式和强调色。",
+    "将先保存完整计划，再应用当前时段的 Windows 模式、应用模式、强调色及显示位置。",
     { title: "保存并应用当前时段？", acceptLabel: "保存并应用" },
   )) return null;
   const payload = workspacePayload();
@@ -1048,13 +1176,17 @@ $$("[data-import-appearance]").forEach((button) => {
     state.draftColors[profile] = color;
     state.colorFields[profile].setColor(color);
     state.draft[`${profile}AppsTheme`] = result.appMode;
+    state.draft[`${profile}SystemTheme`] = result.systemMode;
+    state.draft[`${profile}StartTaskbarAccent`] = result.startTaskbarAccent;
+    state.draft[`${profile}TitleBordersAccent`] = result.titleBordersAccent;
     renderDraft();
     renderColorMatchNote();
     markDraftState();
     const label = profile === "day" ? "昼间" : "夜间";
-    const mode = result.appMode === "light" ? "浅色" : "深色";
+    const systemMode = result.systemMode === "light" ? "浅色 Windows" : "深色 Windows";
+    const appMode = result.appMode === "light" ? "浅色应用" : "深色应用";
     const status = $(`[data-import-status="${profile}"]`);
-    status.textContent = `已导入：${label} · ${mode} · ${color.hex} · 尚未保存`;
+    status.textContent = `已导入：${label} · ${systemMode} · ${appMode} · ${color.hex} · 尚未保存`;
     status.hidden = false;
     status.classList.add("is-imported");
   });
@@ -1086,7 +1218,7 @@ $("#repair-task-button").addEventListener("click", async () => {
 });
 $("#reset-preferences-button").addEventListener("click", async () => {
   if (!await requestConfirmation(
-    "将恢复默认时间和通知设置，并同步修复任务计划；昼夜应用模式选择会保留。",
+    "将恢复默认时间和通知设置，并同步修复任务计划；昼夜外观选择会保留。",
     { title: "恢复默认设置？", acceptLabel: "恢复" },
   )) return;
   const result = await callApi(
@@ -1100,7 +1232,7 @@ $("#reset-preferences-button").addEventListener("click", async () => {
 });
 $("#restore-install-button").addEventListener("click", async () => {
   if (!await requestConfirmation(
-    "将暂停自动切换，并恢复安装前的应用模式和强调色；Windows 系统模式不会改变。",
+    "将暂停自动切换，并恢复安装前记录的 Windows 模式、应用模式、强调色及显示位置。",
     { title: "恢复安装前外观？", acceptLabel: "暂停并恢复" },
   )) return;
   const result = await callApi(

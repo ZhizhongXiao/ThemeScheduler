@@ -7,6 +7,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
+from tests.fixtures.appearance_settings import ScriptedAppearanceSettings
 from theme_scheduler.accent_profile import (
     AccentProfile,
     RgbColor,
@@ -181,6 +182,124 @@ class ExplorerRecoveryScriptTests(unittest.TestCase):
 
 
 class AccentServiceTests(unittest.TestCase):
+    def test_apply_sets_complete_scheduled_appearance(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            active = root / "active.theme"
+            active.write_bytes(_theme_bytes())
+            layout = UserDataLayout(root / "data")
+            backend = DynamicThemeBackend(active)
+            settings = ScriptedAppearanceSettings(backend)
+            profile = AccentProfile(
+                "day",
+                "2026-09-13T06:15:00+08:00",
+                False,
+                0xC4744DA9,
+                "26200",
+            )
+
+            result = apply_accent_profile(
+                profile,
+                layout,
+                apps_theme=ThemeMode.LIGHT,
+                system_theme=ThemeMode.LIGHT,
+                start_taskbar_accent=False,
+                title_borders_accent=False,
+                backend=backend,
+                appearance_backend=settings,
+                settle_seconds=0,
+            )
+
+            self.assertEqual(result.actual["appMode"], "Light")
+            self.assertEqual(result.actual["systemMode"], "Light")
+            self.assertFalse(settings.start_taskbar)
+            self.assertFalse(settings.title_borders)
+            journal = json.loads(
+                (result.transaction_directory / "journal.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(journal["schemaVersion"], 2)
+            self.assertEqual(journal["status"], "applied")
+            self.assertEqual(journal["settingsBefore"]["appsTheme"]["data"], 0)
+
+    def test_complete_appearance_transaction_rolls_back_theme_and_switches(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            active = root / "active.theme"
+            active.write_bytes(_theme_bytes())
+            layout = UserDataLayout(root / "data")
+            backend = DynamicThemeBackend(active)
+            settings = ScriptedAppearanceSettings(backend)
+            profile = AccentProfile(
+                "day",
+                "2026-09-13T06:15:00+08:00",
+                False,
+                0xC4744DA9,
+                "26200",
+            )
+            result = apply_accent_profile(
+                profile,
+                layout,
+                apps_theme=ThemeMode.LIGHT,
+                system_theme=ThemeMode.LIGHT,
+                start_taskbar_accent=False,
+                title_borders_accent=False,
+                backend=backend,
+                appearance_backend=settings,
+                settle_seconds=0,
+            )
+
+            restored = rollback_accent_transaction(
+                result.transaction_directory,
+                backend=backend,
+                appearance_backend=settings,
+                settle_seconds=0,
+            )
+
+            self.assertTrue(restored)
+            self.assertEqual(backend.current_theme_path(), active)
+            self.assertTrue(settings.start_taskbar)
+            self.assertTrue(settings.title_borders)
+
+    def test_registry_verification_failure_rolls_back_complete_appearance(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            active = root / "active.theme"
+            active.write_bytes(_theme_bytes())
+            layout = UserDataLayout(root / "data")
+            backend = DynamicThemeBackend(active)
+            settings = ScriptedAppearanceSettings(backend, fail_verify=True)
+            profile = AccentProfile(
+                "night",
+                "2026-09-13T23:45:00+08:00",
+                False,
+                0xC4744DA9,
+                "26200",
+            )
+
+            with self.assertRaises(LiveThemeApplyError) as raised:
+                apply_accent_profile(
+                    profile,
+                    layout,
+                    apps_theme=ThemeMode.LIGHT,
+                    system_theme=ThemeMode.LIGHT,
+                    start_taskbar_accent=False,
+                    title_borders_accent=False,
+                    backend=backend,
+                    appearance_backend=settings,
+                    settle_seconds=0,
+                )
+
+            self.assertTrue(raised.exception.rollback_succeeded)
+            self.assertEqual(backend.current_theme_path(), active)
+            self.assertTrue(settings.start_taskbar)
+            self.assertTrue(settings.title_borders)
+
     def test_install_restore_uses_current_theme_and_preserves_system_mode(
         self,
     ) -> None:
@@ -219,6 +338,59 @@ class AccentServiceTests(unittest.TestCase):
             )
             self.assertEqual(result.before["systemMode"], "Dark")
             self.assertEqual(result.actual["systemMode"], "Dark")
+
+    def test_install_restore_v2_restores_complete_appearance(self) -> None:
+        from theme_scheduler.appearance import AppearanceRegistrySnapshot, RegistryValue
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            active = root / "active.theme"
+            active.write_bytes(_theme_bytes())
+            layout = UserDataLayout(root / "data")
+            backend = DynamicThemeBackend(active)
+            settings = ScriptedAppearanceSettings(
+                backend,
+                start_taskbar=True,
+                title_borders=False,
+            )
+            backup = InstallBackup(
+                captured_at="2026-09-13T12:00:00+08:00",
+                created_by_version="0.1.5",
+                windows_build="26200",
+                apps_value_exists=True,
+                apps_value_type_code=4,
+                apps_value_data=1,
+                source_theme_path=str(active),
+                theme_sha256="0" * 64,
+                auto_colorization=False,
+                colorization_color="0XC4744DA9",
+                app_mode="Light",
+                system_mode="Light",
+                appearance_registry=AppearanceRegistrySnapshot(
+                    apps_theme=RegistryValue(True, 1, 4),
+                    system_theme=RegistryValue(True, 1, 4),
+                    start_taskbar_accent=RegistryValue(True, 0, 4),
+                    title_borders_accent=RegistryValue(True, 1, 4),
+                ),
+            )
+
+            result = apply_install_backup_appearance(
+                backup,
+                layout,
+                backend=backend,
+                appearance_backend=settings,
+                settle_seconds=0,
+            )
+
+            self.assertEqual(result.actual["systemMode"], "Light")
+            self.assertFalse(settings.start_taskbar)
+            self.assertTrue(settings.title_borders)
+            journal = json.loads(
+                (result.transaction_directory / "journal.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(journal["settingsActual"], settings.capture().as_dict())
 
     def test_apply_creates_hashed_transaction_and_preserves_modes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

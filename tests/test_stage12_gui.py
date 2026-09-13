@@ -418,6 +418,14 @@ class Stage12FrontendContractTests(unittest.TestCase):
         self.assertNotIn("只读取为", self.html)
         self.assertIn('result?.result !== "success"', self.app)
         self.assertIn("state.draftColors[profile] = color", self.app)
+        self.assertIn('accentSource", "string"', self.api_contracts)
+        self.assertIn('sourcesDiverged", "boolean"', self.api_contracts)
+        self.assertIn("当前外观来源", self.app)
+        self.assertIn("活动主题与实时状态", self.app)
+        self.assertIn('id="appearance-report"', self.html)
+        self.assertIn(
+            "readCurrentWindowsAppearance.themeAppearance", self.api_contracts
+        )
         self.assertIn("尚未保存", self.app)
         self.assertIn("安全预览不会读取真实 Windows 外观", self.app)
         self.assertIn("status.hidden = false", self.app)
@@ -441,11 +449,15 @@ class Stage12FrontendContractTests(unittest.TestCase):
         )
 
     def test_application_modes_use_animated_binary_toggles(self) -> None:
-        self.assertIn('data-theme-toggle="day"', self.html)
-        self.assertIn('data-theme-toggle="night"', self.html)
+        self.assertIn('data-mode-toggle="apps" data-profile="day"', self.html)
+        self.assertIn('data-mode-toggle="apps" data-profile="night"', self.html)
+        self.assertIn('data-mode-toggle="system" data-profile="day"', self.html)
+        self.assertIn('data-mode-toggle="system" data-profile="night"', self.html)
         self.assertIn('id="day-theme"', self.html)
         self.assertIn('id="night-theme"', self.html)
-        self.assertIn("state.draft[key]", self.app)
+        self.assertIn('id="day-system-theme"', self.html)
+        self.assertIn('id="night-system-theme"', self.html)
+        self.assertIn("state.draft[`${profile}AppsTheme`]", self.app)
 
     def test_boundary_transition_toast_is_centered_and_short(self) -> None:
         self.assertIn("centered: true", self.app)

@@ -160,10 +160,16 @@ class AutoRecoveryMixin(AutoRunnerBindings):
         transaction: AutoTransaction,
     ) -> AutoRunOutcome:
         try:
-            if self.windows.read_visual_state() != transaction.windows_target:
+            if transaction.windows_target is None:
                 raise AutoTransactionError(
-                    "Current Windows state does not match windowsTarget."
+                    "Windows-verified transaction has no windowsTarget."
                 )
+            failures = self.windows.verify_transaction_target(
+                directory,
+                transaction.windows_target,
+            )
+            if failures:
+                raise AutoTransactionError(failures[0])
             current_state_hash = file_sha256(self.layout.state)
             state_changed = False
             if current_state_hash == transaction.state_before_sha256:
@@ -342,7 +348,11 @@ class AutoRecoveryMixin(AutoRunnerBindings):
             target = theme_visual_state_from_dict(target_payload)
             before = theme_visual_state_from_dict(before_payload)
             current = self.windows.read_visual_state()
-            if current == target:
+            target_failures = self.windows.verify_transaction_target(
+                directory,
+                target,
+            )
+            if current == target and not target_failures:
                 return store.save(
                     replace(
                         transaction,

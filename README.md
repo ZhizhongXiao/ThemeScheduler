@@ -1,10 +1,11 @@
 # ThemeScheduler
 
-ThemeScheduler 是面向 Windows 11 的个人昼夜主题计划工具。它按两个固定边界切换
-默认应用模式和强调色，使用 Windows 任务计划程序运行，并提供 pywebview 工作台、
+ThemeScheduler 是面向 Windows 11 的个人昼夜外观计划工具。它按两个固定边界切换
+Windows 模式、应用模式、强调色及其显示位置，使用 Windows 任务计划程序运行，并提供 pywebview 工作台、
 单文件 Setup、独立卸载器、交互通知和只读健康检查。
 
-当前正式版本为 `0.1.3`：
+当前正式版本为 `0.1.3`；当前源码为 `0.1.5` 功能候选，并作为 `1.0.0` 的功能
+资格基线。稳定版已经完成：
 
 - 开发机当前用户范围的安装、修复重装、计划边界、损坏卸载、可见结果页、
   退出自清理和零残留已验收；
@@ -14,6 +15,12 @@ ThemeScheduler 是面向 Windows 11 的个人昼夜主题计划工具。它按�
 
 正式分发位于 `artifacts/releases/0.1.3/dist/`。普通用户只需要
 `ThemeScheduler-Setup.exe`、`RELEASE-README.md` 和 `SHA256SUMS.txt`。
+`0.1.5` 候选继承 0.1.4 的权威实时外观读取，并把 Windows 模式、应用模式、
+强调色、开始菜单/任务栏强调色及标题栏/窗口边框强调色全部纳入昼夜计划。
+计划值只由用户显式编辑或导入，不再在自动边界学习并覆盖；完整外观实机矩阵已通过，
+当前作为 1.0 的冻结功能基线。接下来依次整理测试目录、补高风险 Windows 分支、扩大 Pyright
+strict 并测量任务桥性能，最后统一升版和重新构建 1.0.0。详见
+[1.0 发布路线](docs/ROADMAP_1.0.md)。
 另一台无 Python 设备的发布验收按
 [TS-142 清单](docs/CLEAN_MACHINE_ACCEPTANCE.md)执行。
 
@@ -23,6 +30,7 @@ ThemeScheduler 是面向 Windows 11 的个人昼夜主题计划工具。它按�
 - [用户安装指南](docs/USER_INSTALLATION.md)：安装、修复和卸载；
 - [架构](docs/ARCHITECTURE.md) 与 [设计](docs/DESIGN.md)：开发边界；
 - [维护清单](docs/BACKLOG.md) 与 [代码质量](docs/CODE_QUALITY.md)：当前状态；
+- [1.0 发布路线](docs/ROADMAP_1.0.md)：阶段顺序、门槛和完成定义；
 - [发布契约](docs/RELEASE.md) 与 [打包说明](packaging/README.md)：构建发布。
 
 阶段性测试流水账已移出源码文档；当前事实以文档索引和发布证据为准。

@@ -16,9 +16,38 @@ python tools/test.py release
 - `coverage`：运行 integration 集合并生成行/分支报告，不重复执行静态检查；
 - `release`：全量测试、编译、锁文件、Pyright、Ruff lint/format 和发布契约门禁。
 
-`0.1.2` 结项时 `integration` 与 `release` 均为 579 项通过，Coverage 逐模块棘轮
-通过。数字只描述该次候选，不作为未来固定断言。
+`0.1.5 RC2` 的资格门禁为 577 项 release 测试通过，Coverage 逐模块棘轮通过。
+数字只描述该次源码身份，不作为未来固定断言；后续文档和测试结构变化后必须生成
+新的报告。完整外观人工实机矩阵也已于 2026-09-13 通过并恢复测试基线。
 
 真实主题、任务、安装和卸载不由通用命令自动执行，必须使用对应验收清单并单独
 授权。干净设备生命周期见 [CLEAN_MACHINE_ACCEPTANCE.md](CLEAN_MACHINE_ACCEPTANCE.md)，
 覆盖率和静态质量规则见 [CODE_QUALITY.md](CODE_QUALITY.md)。
+
+`0.1.5` 回归必须覆盖：config v1→v2 兼容读取、完整 GUI API 契约、权威当前外观
+导入、两种模式和两个强调色显示位置的计划传递、主题与四项注册表的复合回滚、
+安装恢复点 v1/v2 兼容，以及自动入口不再学习 profile。真实 Windows 验收放在全部
+自动门禁和候选构建之后。
+
+## 1.0 测试治理顺序
+
+0.1.5 完整外观实机矩阵已经通过；现按 [ROADMAP_1.0.md](ROADMAP_1.0.md)依次执行：
+
+1. 将当前平铺测试迁移到 `tests/unit`、`tests/integration` 和 `tests/release`；
+2. 同步 `tools/test.py` 的分组与递归发现规则，保持 quick/affected 的功能簇语义；
+3. 补 GUI 启动、Explorer 恢复、Windows 组合适配器和任务桥失败分支；
+4. 在新增安全网下逐文件扩大 Pyright strict；
+5. 最后建立任务桥只读性能基线。
+
+目录迁移必须先记录迁移前测试集合。迁移后测试数量不得下降，不能重复发现同一
+测试；integration、coverage 和 release 必须全部通过，Coverage 的生产源码范围和
+逐模块下限保持不变。读取具体测试文件路径的契约、Ruff 逐文件豁免、发布源码清单
+及 `MANIFEST.in` 必须随迁移核对。
+
+高风险测试以故障是否会造成系统误写、丢失恢复点、遗漏任务或留下进程为排序依据。
+真实 Windows API 难以稳定自动化时，优先使用结构化 Fake/Mock 固定输入、调用顺序、
+超时、隐藏窗口参数、错误类型和回滚结果，不为提高总覆盖率机械测试简单数据类。
+
+任务桥性能测量不进入普通 integration。基准必须单独记录环境、预热、样本数、p50、
+p95 和最大值；默认只读现有产品任务。只有完整健康检查 p50 超过 1 秒且多进程启动
+占总耗时至少 50%，才建议实现批量只读桥接。

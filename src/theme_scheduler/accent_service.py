@@ -18,7 +18,12 @@ from .accent_theme import (
     sha256_bytes,
     write_new_bytes,
 )
-from .appearance import ThemeMode
+from .appearance import (
+    AppearanceRegistrySnapshot,
+    AppearanceSettingsBackend,
+    ThemeMode,
+    WindowsAppearanceSettingsBackend,
+)
 from .backup import InstallBackup
 from .persistence import atomic_write_json, captured_at, load_json_object
 from .storage import UserDataLayout
@@ -102,11 +107,15 @@ def apply_accent_profile(
     layout: UserDataLayout,
     *,
     apps_theme: ThemeMode | None = None,
+    system_theme: ThemeMode | None = None,
+    start_taskbar_accent: bool | None = None,
+    title_borders_accent: bool | None = None,
     transaction_directory: Path | None = None,
     backend: ThemeApplyV2Backend | None = None,
+    appearance_backend: AppearanceSettingsBackend | None = None,
     settle_seconds: float = 2.0,
 ) -> AccentApplyOutcome:
-    """Apply accent and optional app mode in one rollback-capable theme transaction."""
+    """Apply the scheduled appearance in one rollback-capable transaction."""
 
     theme_backend = backend or WindowsThemeApplyBackend()
     layout.ensure_directories()
@@ -137,11 +146,23 @@ def apply_accent_profile(
 
     active_before_path = theme_backend.current_theme_path()
     active_before_content = active_before_path.read_bytes()
+    appearance_targets = (
+        system_theme,
+        start_taskbar_accent,
+        title_borders_accent,
+    )
+    settings = (
+        appearance_backend or WindowsAppearanceSettingsBackend()
+        if any(value is not None for value in appearance_targets)
+        else None
+    )
+    settings_before = settings.capture() if settings is not None else None
     managed = build_managed_theme(
         active_before_content,
         profile.colorization_color,
         auto_colorization=profile.auto_colorization,
         app_mode=apps_theme.value.title() if apps_theme is not None else None,
+        system_mode=system_theme.value.title() if system_theme is not None else None,
         display_name=f"ThemeScheduler {profile.profile.title()} Accent",
     )
     write_new_bytes(before_path, active_before_content)
@@ -149,7 +170,7 @@ def apply_accent_profile(
 
     journal: dict[str, Any] = {
         "kind": "themescheduler.accent-transaction",
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "status": "prepared",
         "preparedAt": captured_at(),
         "profile": profile.as_dict(),
@@ -162,9 +183,23 @@ def apply_accent_profile(
         },
         "before": managed.before.as_dict(),
         "target": managed.after.as_dict(),
+        "settingsBefore": (
+            settings_before.as_dict() if settings_before is not None else None
+        ),
+        "settingsTarget": {
+            "appsTheme": apps_theme.value if apps_theme is not None else None,
+            "systemTheme": system_theme.value if system_theme is not None else None,
+            "startTaskbarAccent": start_taskbar_accent,
+            "titleBordersAccent": title_borders_accent,
+        },
     }
     atomic_write_json(journal_path, journal)
     try:
+        if settings is not None:
+            settings.write_accent_surfaces(
+                start_taskbar=start_taskbar_accent,
+                title_borders=title_borders_accent,
+            )
         applied = apply_and_verify_theme_v2(
             managed_path,
             managed.after,
@@ -173,17 +208,67 @@ def apply_accent_profile(
             backend=theme_backend,
             settle_seconds=settle_seconds,
         )
+        journal.update(
+            {
+                "status": "theme-applied",
+                "actual": applied.actual.as_dict(),
+                "themeManager": {
+                    "name": "IThemeManager2",
+                    "indexBefore": applied.index_before,
+                    "bridgeTargetIndex": applied.bridge_target_index,
+                    "indexAfter": applied.index_after,
+                },
+            }
+        )
+        atomic_write_json(journal_path, journal, force=True)
+        if settings is not None:
+            failures = settings.verify(
+                apps_theme=apps_theme,
+                system_theme=system_theme,
+                start_taskbar=start_taskbar_accent,
+                title_borders=title_borders_accent,
+            )
+            if failures:
+                raise OSError(failures[0])
+            journal["settingsActual"] = settings.capture().as_dict()
     except LiveThemeApplyError as exc:
+        settings_rollback = _restore_appearance_settings(settings, settings_before)
+        rollback_succeeded = exc.rollback_succeeded and settings_rollback
         journal.update(
             {
                 "status": "failed",
                 "completedAt": captured_at(),
                 "error": str(exc),
-                "rollbackSucceeded": exc.rollback_succeeded,
+                "rollbackSucceeded": rollback_succeeded,
             }
         )
         atomic_write_json(journal_path, journal, force=True)
-        raise
+        if rollback_succeeded == exc.rollback_succeeded:
+            raise
+        raise LiveThemeApplyError(
+            f"{exc}; appearance registry rollback failed.",
+            rollback_succeeded=False,
+        ) from exc
+    except Exception as exc:
+        rollback_succeeded = rollback_accent_transaction(
+            transaction,
+            backend=theme_backend,
+            appearance_backend=settings,
+            settle_seconds=settle_seconds,
+        )
+        journal.update(
+            {
+                "status": "failed",
+                "completedAt": captured_at(),
+                "error": str(exc),
+                "rollbackSucceeded": rollback_succeeded,
+            }
+        )
+        atomic_write_json(journal_path, journal, force=True)
+        raise LiveThemeApplyError(
+            f"Scheduled appearance verification failed: {exc}",
+            rollback_succeeded=rollback_succeeded,
+        ) from exc
 
     journal.update(
         {
@@ -217,9 +302,10 @@ def apply_install_backup_appearance(
     layout: UserDataLayout,
     *,
     backend: ThemeApplyV2Backend | None = None,
+    appearance_backend: AppearanceSettingsBackend | None = None,
     settle_seconds: float = 2.0,
 ) -> AccentApplyOutcome:
-    """Restore install-time semantic appearance while preserving SystemMode."""
+    """Restore the complete install-time appearance when the backup supports it."""
 
     if not isinstance(backup, InstallBackup):
         raise TypeError("Install appearance target must be InstallBackup.")
@@ -234,17 +320,39 @@ def apply_install_backup_appearance(
         windows_build=backup.windows_build,
     )
     apps_theme = ThemeMode.LIGHT if backup.app_mode == "Light" else ThemeMode.DARK
+    system_theme: ThemeMode | None = None
+    start_taskbar: bool | None = None
+    title_borders: bool | None = None
+    if backup.appearance_registry is not None:
+        system_theme = (
+            ThemeMode.LIGHT if backup.system_mode == "Light" else ThemeMode.DARK
+        )
+        start_value = backup.appearance_registry.start_taskbar_accent
+        title_value = backup.appearance_registry.title_borders_accent
+        if start_value.exists and start_value.data in {0, 1}:
+            start_taskbar = bool(start_value.data)
+        if title_value.exists and title_value.data in {0, 1}:
+            title_borders = bool(title_value.data)
     outcome = apply_accent_profile(
         target,
         layout,
         apps_theme=apps_theme,
+        system_theme=system_theme,
+        start_taskbar_accent=start_taskbar,
+        title_borders_accent=title_borders,
         backend=backend,
+        appearance_backend=appearance_backend,
         settle_seconds=settle_seconds,
     )
     if (
         outcome.actual.get("appMode") != backup.app_mode
         or outcome.actual.get("colorizationColor") != backup.colorization_color
-        or outcome.actual.get("systemMode") != outcome.before.get("systemMode")
+        or outcome.actual.get("systemMode")
+        != (
+            backup.system_mode
+            if backup.appearance_registry is not None
+            else outcome.before.get("systemMode")
+        )
     ):
         raise RuntimeError("Install appearance restore final verification mismatch.")
     return outcome
@@ -254,6 +362,7 @@ def rollback_accent_transaction(
     transaction_directory: Path,
     *,
     backend: ThemeApplyV2Backend | None = None,
+    appearance_backend: AppearanceSettingsBackend | None = None,
     settle_seconds: float = 2.0,
 ) -> bool:
     """Restore the complete before.theme after a later core-stage failure."""
@@ -273,6 +382,7 @@ def rollback_accent_transaction(
         raise ValueError("Rollback before.theme hash does not match its journal.")
 
     theme_backend = backend or WindowsThemeApplyBackend()
+    theme_restored = False
     manager = journal.get("themeManager")
     if isinstance(manager, dict):
         before_index = manager.get("indexBefore")
@@ -285,14 +395,41 @@ def rollback_accent_transaction(
                     theme_backend.current_theme_path().read_bytes()
                 )
                 if actual == expected:
-                    return True
+                    theme_restored = True
             except Exception:
                 pass
+    if not theme_restored:
+        try:
+            theme_backend.apply_theme_v2(before_path)
+            if settle_seconds:
+                time.sleep(settle_seconds)
+            actual = read_visual_state(theme_backend.current_theme_path().read_bytes())
+            theme_restored = actual == expected
+        except Exception:
+            theme_restored = False
+
+    settings_restored = True
+    settings_payload = journal.get("settingsBefore")
+    if settings_payload is not None:
+        try:
+            if not isinstance(settings_payload, dict):
+                raise TypeError("Appearance rollback snapshot is invalid.")
+            snapshot = AppearanceRegistrySnapshot.from_dict(settings_payload)
+            settings = appearance_backend or WindowsAppearanceSettingsBackend()
+            settings.restore(snapshot)
+        except Exception:
+            settings_restored = False
+    return theme_restored and settings_restored
+
+
+def _restore_appearance_settings(
+    backend: AppearanceSettingsBackend | None,
+    snapshot: AppearanceRegistrySnapshot | None,
+) -> bool:
+    if backend is None or snapshot is None:
+        return True
     try:
-        theme_backend.apply_theme_v2(before_path)
-        if settle_seconds:
-            time.sleep(settle_seconds)
-        actual = read_visual_state(theme_backend.current_theme_path().read_bytes())
-        return actual == expected
+        backend.restore(snapshot)
+        return True
     except Exception:
         return False

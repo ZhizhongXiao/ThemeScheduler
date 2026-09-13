@@ -46,6 +46,10 @@ shared_datas = [
         str(entrypoint_root / "notification_bridge.ps1"),
         "entrypoints",
     ),
+    (
+        str(entrypoint_root / "current_appearance_bridge.ps1"),
+        "entrypoints",
+    ),
 ]
 
 uninstall_datas = [

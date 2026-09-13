@@ -1,6 +1,6 @@
 # ThemeScheduler 自动切换核心契约
 
-状态：`0.1.3` 当前契约。
+状态：`0.1.5` 候选契约。
 
 本文定义时间决策、可信边界、单实例、复合主题事务、退出码和中断恢复语义。持久化结构以 [PERSISTENCE.md](PERSISTENCE.md) 为准，Windows 主题接口以 [DESIGN.md](DESIGN.md) 为准。
 
@@ -10,7 +10,6 @@
 
 `auto` 不得：
 
-- 修改 `SystemUsesLightTheme` 或管理主题的 `SystemMode`；
 - 依赖触发器名称决定昼夜目标；
 - 自动重启 Explorer；
 - 在配置、状态或目标强调色配置不可信时修改 Windows；
@@ -36,30 +35,29 @@
 
 - 配置或状态缺失、损坏、版本未知：返回 `data-untrusted`，不修改 Windows。
 - `paused=true`：返回 `paused`，不计算或携带写入目标。
-- `lastResult=success` 且 `activeProfile` 已等于当前目标：返回 `no-change`，不学习、不应用，保留本时段内用户的手动调整。
+- `lastResult=success` 且 `activeProfile` 已等于当前目标：返回 `no-change`，不重复应用。
 - 其他可信状态：生成 `apply` 计划。
 
-只有同时满足以下条件才能学习即将离开的强调色：
-
-1. `lastResult=success`；
-2. `activeProfile` 为 `day` 或 `night`；
-3. `activeProfile` 与当前目标不同；
-4. 当前活动主题可以严格解析；
-5. 捕获结果可以严格写入对应配置并读回。
-
-`never`、`failed`、`partial` 或 `activeProfile=null` 均跳过学习。跳过学习不等于允许使用损坏状态；损坏状态在加载阶段已经停止。
+自动入口不得学习或覆盖昼夜外观。`profiles/day.json` 和 `profiles/night.json` 只由
+首次安装初始化、GUI 显式编辑或“导入当前 Windows 外观”更新；自动边界只消费
+已经验证的计划。旧事务中的 `learnProfile` 仅为历史日志兼容字段，新事务固定为 `null`。
 
 ## 4. 复合主题事务
 
-阶段 4 不采用“先写 `AppsUseLightTheme`，再套用保留旧 `AppMode` 的强调色主题”的串行组合。该顺序可能让后一步恢复旧应用模式。
+正式路径不采用多个互不回滚的独立写入步骤。
 
 正式路径必须从当前完整主题生成一个管理副本，并在同一副本中只修改：
 
 - `VisualStyles.AutoColorization`；
 - `VisualStyles.ColorizationColor`；
-- `VisualStyles.AppMode`。
+- `VisualStyles.AppMode`；
+- `VisualStyles.SystemMode`。
 
-`VisualStyles.SystemMode` 必须保持调用前原值。随后用隔离的 `IThemeManager2` 一次应用并同时验证应用模式、强调色、Windows 模式和主题管理器转换。完整 `before.theme` 是该复合事务的回滚依据。
+应用前同时快照 `AppsUseLightTheme`、`SystemUsesLightTheme` 以及 Personalize/DWM
+两处 `ColorPrevalence` 的存在性、类型和值。两个强调色显示位置按计划写入，随后用
+隔离的 `IThemeManager2` 一次应用管理主题，并验证两种模式、颜色、显示位置和主题
+管理器转换。完整 `before.theme` 与注册表快照共同构成回滚依据；任一验证失败都必须
+恢复两者，不能提交半应用状态。
 
 阶段 1 的直接注册表写入原型已经退役，不作为维护或回滚兜底。自动与显式手动应用都使用同一复合主题事务，回滚依次尝试恢复原主题索引和完整主题备份。
 
@@ -75,10 +73,8 @@
 | `already-running` | 无 | 不变 | 11 |
 | `data-untrusted` | 无 | 不覆盖损坏证据 | 20 |
 | `apply-failed-rolled-back` | 已恢复调用前状态 | 记录 `failed`；活动归属不前移 | 30 |
-| `partial-failure` | 无法证明完整目标或完整回滚 | 尽力记录 `partial`，下次禁止学习 | 40 |
+| `partial-failure` | 无法证明完整目标或完整回滚 | 尽力记录 `partial`，阻止后续自动写入 | 40 |
 | `fatal-failure` | 未分类故障 | 不声称成功 | 50 |
-
-成功学习的离开时段配置可以在后续目标应用失败时保留，因为它记录的是切换前已经验证的用户颜色，而不是目标时段归属。
 
 日志写入失败不得撤销已经验证且已提交的 Windows 结果，但必须在命令输出中报告 `partial-failure`。通知只是日志之外的后备展示，失败不改变核心事务判定。
 
@@ -90,7 +86,7 @@
 Local\ThemeScheduler.Auto.<data-root-hash>
 ```
 
-哈希使用规范化、大小写折叠后的数据根绝对路径，名称不暴露用户名或完整路径。锁为非阻塞取得，覆盖可信加载、学习、Windows 应用、状态提交、日志和运行事务清理的完整周期。
+哈希使用规范化、大小写折叠后的数据根绝对路径，名称不暴露用户名或完整路径。锁为非阻塞取得，覆盖可信加载、Windows 应用、状态提交、日志和运行事务清理的完整周期。
 
 进程退出或崩溃后由 Windows 释放互斥体。测试通过 `ExecutionLock` 替身验证占用和释放，不依赖真实全局锁。
 
@@ -101,7 +97,7 @@ Local\ThemeScheduler.Auto.<data-root-hash>
 正式编排需要在强调色事务旁保存 `themescheduler.auto-transaction` v1 清单，至少记录：
 
 - 唯一事务 ID 和带偏移时间戳；
-- 目标时段、可选学习来源；
+- 目标时段；历史 `learnProfile` 字段保留但新事务固定为 `null`；
 - 运行前状态文档 SHA-256；
 - 关联的强调色事务目录；
 - `planned`、`windows-verified`、`state-committed`、`completed`、`failed` 或 `partial` 状态；
@@ -110,7 +106,7 @@ Local\ThemeScheduler.Auto.<data-root-hash>
 恢复规则：
 
 - `planned` 中断：Windows 和状态尚未提交，保留失败证据后可重新计划；
-- `windows-verified` 中断：禁止学习；只有当前 Windows 仍匹配目标且运行前状态哈希未变化时，才能补交状态；
+- `windows-verified` 中断：只有当前 Windows 仍匹配完整目标且运行前状态哈希未变化时，才能补交状态；
 - `state-committed` 中断：补写恢复日志并完成清单，不重复应用；
 - 清单损坏、状态哈希变化或 Windows 无法匹配：返回 `data-untrusted` 或 `partial-failure`，等待显式修复。
 
@@ -122,15 +118,15 @@ Local\ThemeScheduler.Auto.<data-root-hash>
 
 - `SystemClock` / `Clock`；
 - `target_profile_at`；
-- `learning_source`；
 - `plan_auto_run`；
 - `AutoPlanKind`、`AutoResultKind` 和 `AutoExitCode`；
 - `ExecutionLock`；
 - `mutex_name_for_data_root`。
 
-`accent_theme.py` 和 `accent_service.py` 已兼容可选目标应用模式；省略该参数时保持阶段 2 的“应用模式不变”行为。
+`accent_theme.py` 和 `accent_service.py` 接受完整外观目标；对旧配置省略的新字段保持
+原值，直到用户在 GUI 中确认并保存迁移后的昼夜计划。
 
-自动运行使用 `RunIntent.AUTOMATIC`，遵守暂停和无变化判定。设置页的“保存并应用当前时段”在计划提交成功后，通过独立 `ManualAppearanceService` 使用 `RunIntent.MANUAL_CURRENT`；它允许暂停时显式应用、不会解除暂停，也不会学习离开时段。旧 `force_apply` 入口已删除。
+自动运行使用 `RunIntent.AUTOMATIC`，遵守暂停和无变化判定。设置页的“保存并应用当前时段”在计划提交成功后，通过独立 `ManualAppearanceService` 使用 `RunIntent.MANUAL_CURRENT`；它允许暂停时显式应用、不会解除暂停。旧 `force_apply` 入口已删除。
 
 正式实现还包括：
 
@@ -138,7 +134,7 @@ Local\ThemeScheduler.Auto.<data-root-hash>
 - `auto_transaction.py`：严格的 `themescheduler.auto-transaction` v1、状态哈希绑定和相邻状态转换；
 - `automation/backend.py`：Windows 能力探针和系统适配；
 - `automation/recovery.py`、`failure.py`：未完成事务恢复与失败收敛；
-- `automation/runner.py`：可信加载、学习、复合应用、状态提交、日志和清理编排；
+- `automation/runner.py`：可信加载、完整外观复合应用、状态提交、日志和清理编排；
 - `python -m theme_scheduler.cli.auto`：只读 `plan` 和双确认保护的实机开发命令 `run`。
 
 真实命名互斥体已完成瞬时冒烟：第二实例被拒绝，释放后可重新取得。该测试没有持久化系统修改。

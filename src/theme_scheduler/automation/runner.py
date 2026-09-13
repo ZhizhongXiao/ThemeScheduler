@@ -63,7 +63,6 @@ class _TrustedRun:
 class _ApplyRun:
     trusted: _TrustedRun
     target_profile: AccentProfile
-    learning_store: AccentProfileStore | None
     state_before_hash: str
     state_after: AppState
     transaction_directory: Path
@@ -318,7 +317,7 @@ class AutoRunner(AutoFailureMixin, AutoRecoveryMixin):
     def _load_apply_profiles(
         self,
         trusted: _TrustedRun,
-    ) -> tuple[AccentProfile, AccentProfileStore | None] | AutoRunOutcome:
+    ) -> AccentProfile | AutoRunOutcome:
         plan = trusted.plan
         assert plan.target_profile is not None
         target_store = AccentProfileStore(
@@ -326,15 +325,7 @@ class AutoRunner(AutoFailureMixin, AutoRecoveryMixin):
             plan.target_profile,
         )
         try:
-            target_profile = target_store.load()
-            learning_store = None
-            if plan.learn_profile is not None:
-                learning_store = AccentProfileStore(
-                    self.layout.profile_path(plan.learn_profile),
-                    plan.learn_profile,
-                )
-                learning_store.load()
-            return target_profile, learning_store
+            return target_store.load()
         except Exception as exc:
             message = (
                 f"Required accent profile is untrusted: {type(exc).__name__}: {exc}"
@@ -393,7 +384,6 @@ class AutoRunner(AutoFailureMixin, AutoRecoveryMixin):
         self,
         trusted: _TrustedRun,
         target_profile: AccentProfile,
-        learning_store: AccentProfileStore | None,
     ) -> _ApplyRun:
         plan = trusted.plan
         assert plan.target_profile is not None
@@ -418,7 +408,7 @@ class AutoRunner(AutoFailureMixin, AutoRecoveryMixin):
                 updated_at=trusted.timestamp,
                 target_profile=plan.target_profile,
                 target_apps_theme=plan.target_apps_theme,
-                learn_profile=plan.learn_profile,
+                learn_profile=None,
                 state_before_sha256=state_before_hash,
                 state_after=state_after,
                 state_after_sha256=json_document_sha256(state_after.as_dict()),
@@ -428,46 +418,12 @@ class AutoRunner(AutoFailureMixin, AutoRecoveryMixin):
         return _ApplyRun(
             trusted,
             target_profile,
-            learning_store,
             state_before_hash,
             state_after,
             directory,
             store,
             transaction,
         )
-
-    def _learn_departing_profile(
-        self,
-        context: _ApplyRun,
-    ) -> _ApplyRun | AutoRunOutcome:
-        profile_name = context.trusted.plan.learn_profile
-        if profile_name is None:
-            return context
-        assert context.learning_store is not None
-        try:
-            learned_profile = self.windows.capture_profile(
-                profile_name,
-                context.trusted.timestamp,
-            )
-            context.learning_store.replace_if_valid(learned_profile)
-            return replace(context, learned=profile_name)
-        except Exception as exc:
-            failed = replace(
-                context.transaction,
-                status="failed",
-                updated_at=captured_at(),
-                error_code="learning.failed",
-                message=(
-                    f"Departing profile learning failed: {type(exc).__name__}: {exc}"
-                )[:500],
-            )
-            context.transaction_store.save(failed)
-            return self._outcome(
-                AutoResultKind.APPLY_FAILED_ROLLED_BACK,
-                failed.message or "Departing profile learning failed.",
-                target=context.trusted.plan.target_profile,
-                transaction=context.transaction_directory,
-            )
 
     def _apply_target_profile(
         self,
@@ -479,6 +435,13 @@ class AutoRunner(AutoFailureMixin, AutoRecoveryMixin):
             apply_outcome = self.windows.apply_profile(
                 context.target_profile,
                 ThemeMode(plan.target_apps_theme),
+                (
+                    ThemeMode(plan.target_system_theme)
+                    if plan.target_system_theme is not None
+                    else None
+                ),
+                plan.target_start_taskbar_accent,
+                plan.target_title_borders_accent,
                 context.transaction_directory,
             )
             actual = theme_visual_state_from_dict(apply_outcome.actual)
@@ -725,11 +688,8 @@ class AutoRunner(AutoFailureMixin, AutoRecoveryMixin):
         capability_failure = self._probe_apply_capability(trusted)
         if capability_failure is not None:
             return capability_failure
-        context = self._create_apply_run(trusted, *profiles)
-        learned = self._learn_departing_profile(context)
-        if isinstance(learned, AutoRunOutcome):
-            return learned
-        applied = self._apply_target_profile(learned)
+        context = self._create_apply_run(trusted, profiles)
+        applied = self._apply_target_profile(context)
         if isinstance(applied, AutoRunOutcome):
             return applied
         committed = self._commit_run_state(applied)

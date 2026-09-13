@@ -18,6 +18,7 @@ from theme_scheduler.accent_profile import (
     AccentProfileStore,
 )
 from theme_scheduler.accent_theme import ThemeVisualState
+from theme_scheduler.appearance import CurrentWindowsAppearance
 from theme_scheduler.config import AppConfig, ConfigStore
 from theme_scheduler.gui import (
     frontend_entry,
@@ -217,6 +218,12 @@ def payload(**changes):
         "nightStart": "23:45",
         "dayAppsTheme": "light",
         "nightAppsTheme": "dark",
+        "daySystemTheme": "light",
+        "nightSystemTheme": "dark",
+        "dayStartTaskbarAccent": False,
+        "nightStartTaskbarAccent": True,
+        "dayTitleBordersAccent": False,
+        "nightTitleBordersAccent": True,
         "notifyErrors": True,
         "notifyStatusChanges": True,
     }
@@ -273,11 +280,14 @@ class GuiApiTests(unittest.TestCase):
             health_service_factory=FakeHealthService,
             identity_repair_service_factory=(lambda: self.identity_repair),
             manual_appearance_service_factory=(lambda: self.manual_appearance),
-            current_appearance_reader=lambda: ThemeVisualState(
-                "0",
-                0xD0744DA9,
-                "Light",
-                "Dark",
+            current_appearance_reader=lambda: CurrentWindowsAppearance(
+                visual=ThemeVisualState(
+                    "0",
+                    0xD0744DA9,
+                    "Light",
+                    "Dark",
+                ),
+                accent_source="winrt-ui-settings",
             ),
             shell_actions=self.shell,  # type: ignore[arg-type]
             clock=FixedClock(),  # type: ignore[arg-type]
@@ -332,6 +342,10 @@ class GuiApiTests(unittest.TestCase):
         self.assertEqual(result["systemMode"], "dark")
         self.assertEqual(result["color"]["hex"], "#744DA9")
         self.assertEqual(result["colorizationColor"], "0XD0744DA9")
+        self.assertEqual(result["accentSource"], "winrt-ui-settings")
+        self.assertFalse(result["sourcesDiverged"])
+        self.assertEqual(result["divergences"], [])
+        self.assertIsNone(result["themeAppearance"])
         self.assertFalse(result["dataChanged"])
         self.assertFalse(result["windowsChanged"])
         self.assertFalse(result["taskSchedulerChanged"])
@@ -485,11 +499,14 @@ class GuiApiTests(unittest.TestCase):
             executable=self.executable,
             scheduler_backend=self.scheduler,
             lock_factory=FakeLock,
-            current_appearance_reader=lambda: ThemeVisualState(
-                "0",
-                0xC4FFB900,
-                "Dark",
-                "Dark",
+            current_appearance_reader=lambda: CurrentWindowsAppearance(
+                visual=ThemeVisualState(
+                    "0",
+                    0xC4FFB900,
+                    "Dark",
+                    "Dark",
+                ),
+                accent_source="winrt-ui-settings",
             ),
             shell_actions=self.shell,  # type: ignore[arg-type]
             clock=FixedClock(),  # type: ignore[arg-type]
@@ -570,6 +587,25 @@ class GuiApiTests(unittest.TestCase):
         )
 
         self.assertNotEqual(result["result"], "changed")
+        self.assertEqual(self.manual_appearance.calls, 0)
+
+    def test_pending_transaction_failure_keeps_gui_flags_boolean(self) -> None:
+        self.create_profiles()
+        with patch(
+            "theme_scheduler.configuration_service.ensure_no_pending_auto_transaction",
+            side_effect=RuntimeError("pending transaction"),
+        ):
+            result = self.api.save_workspace_and_apply(
+                workspace_payload(dayStart="07:00"),
+                True,
+            )
+
+        self.assertEqual(result["action"], "save-workspace")
+        self.assertEqual(result["result"], "data-untrusted")
+        self.assertIn("pending transaction", result["message"])
+        self.assertIs(result["dataChanged"], False)
+        self.assertIs(result["windowsChanged"], False)
+        self.assertIs(result["taskSchedulerChanged"], False)
         self.assertEqual(self.manual_appearance.calls, 0)
 
     def test_saved_plan_reports_unavailable_manual_application(self) -> None:

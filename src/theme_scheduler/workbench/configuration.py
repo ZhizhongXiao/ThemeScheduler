@@ -15,6 +15,21 @@ from .contracts import WorkbenchBindings, WorkspaceValidationResult
 
 
 class GuiConfigurationMixin(WorkbenchBindings):
+    @staticmethod
+    def _normalize_workspace_response(
+        response: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Keep nullable core outcomes behind the strict GUI API boundary."""
+
+        normalized = dict(response)
+        for field in (
+            "dataChanged",
+            "windowsChanged",
+            "taskSchedulerChanged",
+        ):
+            normalized[field] = normalized.get(field) is True
+        return normalized
+
     def validate_workspace(
         self,
         payload: Mapping[str, Any],
@@ -78,10 +93,12 @@ class GuiConfigurationMixin(WorkbenchBindings):
                     user_id=self._scheduler.current_user_id(),
                     audit_event="appearance.configuration.updated",
                 )
-                response = service.update_bundle(
-                    target,
-                    colors,
-                ).as_dict()
+                response = self._normalize_workspace_response(
+                    service.update_bundle(
+                        target,
+                        colors,
+                    ).as_dict()
+                )
                 response["action"] = "save-workspace"
                 response["initialSetupActivated"] = False
                 if setup_pending and response.get("result") in {

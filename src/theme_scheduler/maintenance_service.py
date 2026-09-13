@@ -259,13 +259,16 @@ class MaintenanceService:
                 None,
             )
 
-        system_preserved = applied.actual.get("systemMode") == applied.before.get(
-            "systemMode"
+        expected_system_mode = (
+            backup.system_mode
+            if backup.appearance_registry is not None
+            else applied.before.get("systemMode")
         )
+        system_verified = applied.actual.get("systemMode") == expected_system_mode
         verified = bool(
             applied.actual.get("appMode") == backup.app_mode
             and applied.actual.get("colorizationColor") == backup.colorization_color
-            and system_preserved
+            and system_verified
         )
         if not verified:
             return self._appearance_failure(

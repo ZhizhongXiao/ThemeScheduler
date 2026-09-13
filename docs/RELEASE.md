@@ -1,10 +1,14 @@
-# ThemeScheduler 0.1.3 发布契约
+# ThemeScheduler 1.0.0 发布契约
 
 ## 1. 目标与范围
 
-当前流程生成面向 Windows 11 x64、少量熟人分发的 `0.1.3` 候选。
-候选继续采用当前用户安装、单文件 Setup、`onedir` 主程序和独立单文件
-卸载器。目标设备不需要 Python、pip、uv 或虚拟环境。
+本契约在 `0.1.5` 完整外观功能资格验收和 1.0 工程收口之后，生成面向 Windows 11
+x64、少量熟人分发的 `1.0.0` 正式候选。候选继续采用当前用户安装、单文件 Setup、
+`onedir` 主程序和独立单文件卸载器。目标设备不需要 Python、pip、uv 或虚拟环境。
+
+`0.1.5 RC2` 的自动门禁、双构建和 Defender 结果只证明功能候选；测试结构、类型
+配置、文档或任务桥一旦变化，旧报告和旧二进制不能为 1.0 背书。阶段顺序和完成定义
+见 [ROADMAP_1.0.md](ROADMAP_1.0.md)。
 
 首版自有 EXE 不采用 Authenticode。该决定不降低 Defender、SmartScreen
 或 Smart App Control 设置，也不改变随包运行 Microsoft WebView2 安装程序
@@ -20,11 +24,12 @@
 - Windows 11 x64；
 - `PYTHONHASHSEED=0`；
 - `SOURCE_DATE_EPOCH=1767225600`；
-- `pyproject.toml`、包版本、三份 EXE 版本资源和载荷清单版本均为 `0.1.3`；
+- 最终构建前，`pyproject.toml`、包版本、三份 EXE 版本资源、安装器文案、用户文档
+  和载荷清单版本必须统一为 `1.0.0`；
 - `assets/ThemeScheduler.ico` 为七尺寸确定性 ICO。
 
-项目当前不是 Git 仓库，因此发布候选使用
-`themescheduler.source-manifest` v1 作为等价源码身份：逐项记录源码、入口、
+无论 Git 工作树状态如何，发布候选都使用
+`themescheduler.source-manifest` v1 作为构建源码身份：逐项记录源码、入口、
 前端、打包脚本、资产、测试和文档的相对路径、大小及 SHA-256，再对规范
 文件数组计算 `sourceTreeSha256`。`artifacts/`、`.venv/`、缓存和字节码不进入
 源码身份。
@@ -53,8 +58,8 @@ uv sync --group build --group quality
 
 ```powershell
 .venv\Scripts\python.exe packaging\build_release.py `
-  --output-root artifacts\build\stage19-0.1.3-rcN `
-  --version 0.1.3 `
+  --output-root artifacts\build\1.0.0-rcN `
+  --version 1.0.0 `
   --python .venv\Scripts\python.exe `
   --test-report artifacts\test-reports\<release-report>.json
 ```
@@ -102,7 +107,8 @@ Setup 与用户说明。`dist/RELEASE-README.md` 明确说明未签名状态、�
 
 候选安装前必须完成：
 
-1. `quick stage14`、`affected stage14`、一次 `integration` 和最终 `release` 测试通过；
+1. 测试目录迁移后的一次 `integration`、`coverage`、Coverage 棘轮和最终 `release`
+   测试通过；
 2. 两次构建的关键二进制及载荷清单哈希比较；
 3. 三个 EXE 均为 PE32+ x64、Windows GUI 子系统；
 4. 三个 EXE 的版本、说明、原始文件名和 CompanyName 精确读回；
@@ -114,15 +120,20 @@ Setup 与用户说明。`dist/RELEASE-README.md` 明确说明未签名状态、�
 
 ## 6. 实机与兼容性门槛
 
-实机写入仍按 [INSTALLATION.md](INSTALLATION.md) 单独授权。`0.1.3` 使用变更驱动
-矩阵，至少覆盖：
+实机写入仍按 [INSTALLATION.md](INSTALLATION.md) 单独授权。1.0 继承 `0.1.3`
+生命周期证据、0.1.4 当前外观读取验收和通过后的 0.1.5 完整外观矩阵，并执行最终
+候选的最小充分生命周期：
 
-- 当前无安装基线上的经典 Setup 首次安装，默认不立即同步；
-- GUI 昼夜双配色、12/24 小时表盘和两个方向的计划边界；
-- GUI、维护入口、通知协议、任务和控制面板登记；
-- 同版本经典 Setup 修复/重装和数据保持；
-- 主 EXE 损坏时经典 Uninstall 保持外观并保留数据/日志；
-- 保留数据再次安装后，最终恢复安装前外观并完成零残留卸载。
+- 通过 Setup 安装或升级 `1.0.0`，确认版本、GUI 与任务入口正常；
+- 昼间、夜间分别设置不同的 Windows 模式、应用模式、强调色和两个显示位置；
+- “导入当前 Windows 外观”必须同时读取两种模式、当前颜色和两个显示位置；
+- 导入只更新对应时段草稿，不立即保存、更新任务或改变 Windows 外观；
+- 保存后重新读取，确认 config schema v2、profile 和任务一致；
+- “保存并应用当前时段”以及一次真实计划边界均应用完整目标；
+- 人工验证开始菜单/任务栏与标题栏/窗口边框开关分别生效；
+- 注入应用或验证失败时，自动测试必须证明主题与四项注册表状态共同回滚；
+- 调试页能报告 WinRT 来源以及活动主题/实时状态是否分裂；
+- 用最终候选完成控制面板卸载、退出自清理和零残留复验。
 
 阶段 9–10 已实机通过且本轮未改变语义的睡眠、关机、静默边界、通知按钮 nonce
 和健康入口不机械重跑，由完整自动回归和历史证据承接。详细批次见
@@ -154,13 +165,19 @@ WebView2 已存在路径必须通过。缺失联网和缺失离线路径如果�
 - 强调色主路径依赖已隔离且经实机验证的未公开 `IThemeManager2`；
 - WebView2 Runtime 是系统依赖，不等同于随程序打包的桥接 DLL。
 
-## 9. `0.1.3` 正式发布状态
+## 9. 1.0 路线状态
 
-`0.1.3` 在 0.1.2 稳定生命周期之上增加“保存并应用当前时段外观”，删除旧立即
-同步与阶段 1 主题/强调色原型，并完成维护/调试入口收口。工作台使用居中模态确认
-窗；操作结果按权重显示中央中文短提示，低权重且已有页面反馈的操作不再弹出。
-最终测试数量、源码身份、二进制哈希、PE 属性和 Defender 结果以
-`artifacts/releases/0.1.3/evidence/` 中的冻结机器证据为准。
+`0.1.4` 已修复“导入当前 Windows 外观”误把可能滞后的活动 `.theme` 当作实时
+权威的问题：应用模式改读 `AppsUseLightTheme`，强调色改读公开 WinRT
+`UISettings.GetColorValue(Accent)`，系统模式和自动取色分别从其权威注册表值读取。
+活动主题只用于调试差异和颜色高字节兼容，不得覆盖实时应用模式或可见 RGB。
+
+2026-09-13 的 0.1.4 RC2 开发机当前用户定向验收确认：“导入当前 Windows 外观”能够
+取得实时选择，“保存并应用当前时段”能够完成。RC1 首次复验曾被一份旧的
+`partial` 自动事务安全阻止；当时 GUI 又因可空 changed 字段违反前端布尔契约而
+遮蔽了真实原因。RC2 已在工作台 API 边界将三个 changed 字段规范为布尔值，并以
+失败分支回归测试固定该行为。旧事务完整隔离留证后，产品事务守卫、配置、状态和
+昼夜 profile 均读回有效，RC2 实机复验不再出现 API 契约错误。
 
 开发机当前用户精简生命周期已经完成：首次安装不创建桌面快捷方式且不立即同步；
 计划边界、三按钮预通知、实际主题切换和成功通知通过；同版本修复保留受保护数据；
@@ -168,8 +185,16 @@ WebView2 已存在路径必须通过。缺失联网和缺失离线路径如果�
 交接后的临时卸载窗口、进度与结果页均可见；点击结果页“退出”后两个卸载进程和
 临时目录约 1 秒内自动清零，不依赖任务管理器或两分钟异常保底。
 
-`0.1.3` 的发布结论只在完整门禁、连续双构建、PE/payload 复验和 Defender 扫描
-通过后成立；冻结目录中的发布清单和 SHA256SUMS 是哈希的唯一权威来源。
+`0.1.5 RC2` 已在同一源码身份下通过 577 项 release 测试、Coverage 棘轮、连续
+双构建、PE/payload 复验和 Defender 扫描。2026-09-13 的 RC2-A 实机矩阵又确认了
+完整外观导入、仅保存、手动应用和真实任务边界，并在结束后精确恢复数据、任务及
+Windows 外观。0.1.5 因此成为 1.0 功能基线，不要求单独对外发布。
+
+随后必须依次完成测试目录/发现规则整理、高风险 Windows 分支、逐文件 Pyright
+strict 和任务桥性能测量。完成这些工程收口后统一升版为 `1.0.0`，重新运行全部门禁、
+双构建和 Defender，并用最终二进制完成精简生命周期。只有最终证据与源码身份一致，
+才能冻结到 `artifacts/releases/1.0.0`。在此之前，`0.1.3` 的冻结目录、发布清单和
+SHA256SUMS 仍是正式版的唯一权威来源。
 
 TS-142 已在另一台无 Python 的 Windows x64 设备完成 SmartScreen、首次安装、关闭
 GUI 后的计划边界、通知、`0.1.1 → 0.1.2` 六项数据保留升级及独立卸载验收。

@@ -6,7 +6,7 @@ import json
 from typing import Any
 
 from ..accent_profile import AccentProfileStore, RgbColor
-from ..accent_theme import ThemeVisualState
+from ..appearance import CurrentWindowsAppearance
 from ..backup import InstallBackupStore
 from ..config import AppConfig, ConfigStore
 from ..core import target_profile_at
@@ -266,24 +266,35 @@ class GuiOverviewMixin(WorkbenchBindings):
                     taskSchedulerChanged=False,
                 )
             try:
-                visual = self._current_appearance_reader()
-                if not isinstance(visual, ThemeVisualState):
+                appearance = self._current_appearance_reader()
+                if not isinstance(appearance, CurrentWindowsAppearance):
                     raise TypeError(
                         "Current appearance reader returned an invalid value."
                     )
+                visual = appearance.visual
                 color = RgbColor.from_colorization_color(visual.colorization_color)
                 return AppearanceResult(
                     action="read-current-windows-appearance",
                     result="success",
                     message=(
-                        "Current Windows application mode and accent were "
-                        "read into the page draft; nothing was saved."
+                        "The complete current Windows appearance was read "
+                        "into the page draft; nothing was saved."
                     ),
                     appMode=visual.app_mode.casefold(),
                     systemMode=visual.system_mode.casefold(),
+                    startTaskbarAccent=appearance.start_taskbar_accent,
+                    titleBordersAccent=appearance.title_borders_accent,
                     autoColorization=(visual.auto_colorization == "1"),
                     colorizationColor=(f"0X{visual.colorization_color:08X}"),
                     color=color.as_dict(),
+                    accentSource=appearance.accent_source,
+                    sourcesDiverged=appearance.sources_diverged,
+                    divergences=list(appearance.divergences),
+                    themeAppearance=(
+                        appearance.theme_visual.as_dict()
+                        if appearance.theme_visual is not None
+                        else None
+                    ),
                     dataChanged=False,
                     windowsChanged=False,
                     taskSchedulerChanged=False,

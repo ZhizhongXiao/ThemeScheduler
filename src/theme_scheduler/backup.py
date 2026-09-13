@@ -20,8 +20,12 @@ from .accent_theme import (
 from .appearance import (
     APPS_THEME_VALUE,
     REG_DWORD,
+    AppearanceRegistrySnapshot,
+    AppearanceSettingsBackend,
     AppsThemeReader,
+    RegistryValue,
     WindowsAppearanceReader,
+    WindowsAppearanceSettingsBackend,
 )
 from .errors import DataError
 from .persistence import (
@@ -32,7 +36,7 @@ from .persistence import (
 )
 
 INSTALL_BACKUP_KIND = "themescheduler.install-backup"
-INSTALL_BACKUP_SCHEMA_VERSION = 1
+INSTALL_BACKUP_SCHEMA_VERSION = 2
 _SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 _COLOR_PATTERN = re.compile(r"0X[0-9A-F]{8}")
 
@@ -74,6 +78,7 @@ class InstallBackup:
     colorization_color: str
     app_mode: str
     system_mode: str
+    appearance_registry: AppearanceRegistrySnapshot | None = None
 
     def __post_init__(self) -> None:
         _require_timestamp(self.captured_at)
@@ -139,11 +144,39 @@ class InstallBackup:
                 raise InstallBackupValidationError(
                     "AppsUseLightTheme data does not match activeTheme.appMode."
                 )
+        if self.appearance_registry is not None:
+            if not isinstance(
+                self.appearance_registry,
+                AppearanceRegistrySnapshot,
+            ):
+                raise InstallBackupValidationError(
+                    "appearanceRegistry must be an exact registry snapshot."
+                )
+            if self.appearance_registry.apps_theme != RegistryValue(
+                self.apps_value_exists,
+                self.apps_value_data,
+                self.apps_value_type_code,
+            ):
+                raise InstallBackupValidationError(
+                    "appearanceRegistry AppsUseLightTheme does not match legacy binding."
+                )
+            system_value = self.appearance_registry.system_theme
+            if system_value.exists:
+                expected_system_mode = "Light" if system_value.data == 1 else "Dark"
+                if self.system_mode != expected_system_mode:
+                    raise InstallBackupValidationError(
+                        "appearanceRegistry SystemUsesLightTheme does not match "
+                        "activeTheme.systemMode."
+                    )
 
     def as_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "kind": INSTALL_BACKUP_KIND,
-            "schemaVersion": INSTALL_BACKUP_SCHEMA_VERSION,
+            "schemaVersion": (
+                INSTALL_BACKUP_SCHEMA_VERSION
+                if self.appearance_registry is not None
+                else 1
+            ),
             "capturedAt": self.captured_at,
             "createdByVersion": self.created_by_version,
             "environment": {"windowsBuild": self.windows_build},
@@ -162,29 +195,32 @@ class InstallBackup:
                 "systemMode": self.system_mode,
             },
         }
+        if self.appearance_registry is not None:
+            payload["appearanceRegistry"] = self.appearance_registry.as_dict()
+        return payload
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> InstallBackup:
-        _exact(
-            payload,
-            {
-                "kind",
-                "schemaVersion",
-                "capturedAt",
-                "createdByVersion",
-                "environment",
-                "appsUseLightTheme",
-                "activeTheme",
-            },
-            "install backup",
-        )
+        schema_version = payload.get("schemaVersion")
+        if schema_version not in {1, INSTALL_BACKUP_SCHEMA_VERSION}:
+            raise InstallBackupValidationError(
+                "Unsupported install backup schemaVersion."
+            )
+        expected = {
+            "kind",
+            "schemaVersion",
+            "capturedAt",
+            "createdByVersion",
+            "environment",
+            "appsUseLightTheme",
+            "activeTheme",
+        }
+        if schema_version == INSTALL_BACKUP_SCHEMA_VERSION:
+            expected.add("appearanceRegistry")
+        _exact(payload, expected, "install backup")
         if payload.get("kind") != INSTALL_BACKUP_KIND:
             raise InstallBackupValidationError(
                 "JSON is not a ThemeScheduler install backup."
-            )
-        if payload.get("schemaVersion") != INSTALL_BACKUP_SCHEMA_VERSION:
-            raise InstallBackupValidationError(
-                "Unsupported install backup schemaVersion."
             )
         environment = payload.get("environment")
         apps = payload.get("appsUseLightTheme")
@@ -215,6 +251,19 @@ class InstallBackup:
             raise InstallBackupValidationError(
                 "activeTheme.backupPath must be install.theme."
             )
+        appearance_registry: AppearanceRegistrySnapshot | None = None
+        if schema_version == INSTALL_BACKUP_SCHEMA_VERSION:
+            appearance = payload.get("appearanceRegistry")
+            if not isinstance(appearance, Mapping):
+                raise InstallBackupValidationError(
+                    "appearanceRegistry must be an object."
+                )
+            try:
+                appearance_registry = AppearanceRegistrySnapshot.from_dict(appearance)
+            except (TypeError, ValueError) as exc:
+                raise InstallBackupValidationError(
+                    f"appearanceRegistry is invalid: {exc}"
+                ) from exc
         return cls(
             captured_at=payload.get("capturedAt"),  # type: ignore[arg-type]
             created_by_version=payload.get("createdByVersion"),  # type: ignore[arg-type]
@@ -228,6 +277,7 @@ class InstallBackup:
             colorization_color=theme.get("colorizationColor"),  # type: ignore[arg-type]
             app_mode=theme.get("appMode"),  # type: ignore[arg-type]
             system_mode=theme.get("systemMode"),  # type: ignore[arg-type]
+            appearance_registry=appearance_registry,
         )
 
 
@@ -316,13 +366,19 @@ def capture_install_backup(
     windows_build: str,
     theme_backend: ThemeApplyV2Backend | None = None,
     app_backend: AppsThemeReader | None = None,
+    appearance_backend: AppearanceSettingsBackend | None = None,
     colorization_reader: Callable[[], int] | None = None,
     timestamp: str | None = None,
 ) -> InstallBackup:
     """Create the immutable first-install backup from current Windows state."""
 
     active_theme = theme_backend or WindowsThemeApplyBackend()
-    registry = app_backend or WindowsAppearanceReader()
+    settings = (
+        appearance_backend
+        if appearance_backend is not None
+        else (None if app_backend is not None else WindowsAppearanceSettingsBackend())
+    )
+    registry = app_backend or settings or WindowsAppearanceReader()
     source_path = active_theme.current_theme_path()
     if not source_path.is_absolute() or not source_path.is_file():
         raise InstallBackupValidationError(
@@ -330,18 +386,29 @@ def capture_install_backup(
         )
     content = source_path.read_bytes()
     visual = read_visual_state(content)
-    apps = registry.read_value(APPS_THEME_VALUE)
+    appearance_registry = settings.capture() if settings is not None else None
+    apps = (
+        appearance_registry.apps_theme
+        if appearance_registry is not None
+        else registry.read_value(APPS_THEME_VALUE)  # type: ignore[attr-defined]
+    )
     read_colorization = colorization_reader or (
         WindowsAppearanceReader().read_colorization_color
     )
     colorization_color = read_colorization()
     source_after = active_theme.current_theme_path()
-    apps_after = registry.read_value(APPS_THEME_VALUE)
+    appearance_after = settings.capture() if settings is not None else None
+    apps_after = (
+        appearance_after.apps_theme
+        if appearance_after is not None
+        else registry.read_value(APPS_THEME_VALUE)  # type: ignore[attr-defined]
+    )
     colorization_after = read_colorization()
     if (
         source_after.resolve(strict=False) != source_path.resolve(strict=False)
         or source_after.read_bytes() != content
         or apps_after != apps
+        or appearance_after != appearance_registry
         or colorization_after != colorization_color
     ):
         raise InstallBackupValidationError(
@@ -364,11 +431,25 @@ def capture_install_backup(
     app_mode = (
         ("Light" if data == 1 else "Dark") if data is not None else visual.app_mode
     )
+    system_mode = visual.system_mode
+    if appearance_registry is not None:
+        system_value = appearance_registry.system_theme
+        if system_value.exists:
+            if (
+                system_value.type_code != REG_DWORD
+                or isinstance(system_value.data, bool)
+                or system_value.data not in {0, 1}
+            ):
+                raise InstallBackupValidationError(
+                    "Current SystemUsesLightTheme is not a valid REG_DWORD."
+                )
+            system_mode = "Light" if system_value.data == 1 else "Dark"
     recovery_content = normalize_theme_visual_state(
         content,
         colorization_color,
         auto_colorization=visual.auto_colorization == "1",
         app_mode=app_mode,
+        system_mode=system_mode,
     )
     recovery_visual = read_visual_state(recovery_content)
     manifest = InstallBackup(
@@ -384,5 +465,6 @@ def capture_install_backup(
         colorization_color=(f"0X{recovery_visual.colorization_color:08X}"),
         app_mode=recovery_visual.app_mode,
         system_mode=recovery_visual.system_mode,
+        appearance_registry=appearance_registry,
     )
     return store.create(manifest, recovery_content)

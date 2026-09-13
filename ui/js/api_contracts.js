@@ -28,6 +28,15 @@
     names.forEach(([name, type]) => field(value, name, type, path));
   }
 
+  function nullableField(value, name, type, path) {
+    if (!(name in value)) {
+      throw new ApiContractError(`${path}.${name} 缺失`);
+    }
+    if (value[name] !== null && typeof value[name] !== type) {
+      throw new ApiContractError(`${path}.${name} 应为 ${type} 或 null`);
+    }
+  }
+
   function validateOverview(data) {
     if (!["success", "partial"].includes(data.result)) return;
     fields(data, [
@@ -46,6 +55,17 @@
       ["notifyErrors", "boolean"],
       ["notifyStatusChanges", "boolean"],
     ], "overview.config");
+    for (const name of ["daySystemTheme", "nightSystemTheme"]) {
+      nullableField(config, name, "string", "overview.config");
+    }
+    for (const name of [
+      "dayStartTaskbarAccent",
+      "nightStartTaskbarAccent",
+      "dayTitleBordersAccent",
+      "nightTitleBordersAccent",
+    ]) {
+      nullableField(config, name, "boolean", "overview.config");
+    }
 
     record(data.state, "overview.state");
     const profiles = record(data.profiles, "overview.profiles");
@@ -73,8 +93,23 @@
 
   function validateAppearance(data) {
     if (data.result !== "success") return;
-    field(data, "appMode", "string", "readCurrentWindowsAppearance");
+    fields(data, [
+      ["appMode", "string"],
+      ["systemMode", "string"],
+      ["startTaskbarAccent", "boolean"],
+      ["titleBordersAccent", "boolean"],
+      ["accentSource", "string"],
+      ["sourcesDiverged", "boolean"],
+    ], "readCurrentWindowsAppearance");
     record(data.color, "readCurrentWindowsAppearance.color");
+    if (!Array.isArray(data.divergences)) {
+      throw new ApiContractError(
+        "readCurrentWindowsAppearance.divergences 应为数组",
+      );
+    }
+    if (data.themeAppearance !== null && data.themeAppearance !== undefined) {
+      record(data.themeAppearance, "readCurrentWindowsAppearance.themeAppearance");
+    }
   }
 
   const operation = (method, responseActions, validate = null) => Object.freeze({

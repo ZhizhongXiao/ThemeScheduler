@@ -1,7 +1,7 @@
 # ThemeScheduler 持久化契约
 
-版本：数据契约 v1  
-状态：`0.1.3` 当前契约
+版本：数据契约 v1
+状态：`0.1.5` 候选当前契约
 
 ## 1. 目的与边界
 
@@ -94,18 +94,22 @@ backup/install.json
 backup/install.theme
 ```
 
-清单固定包含：
+schema v1 清单包含原有应用模式和主题恢复信息；0.1.5 新建的 schema v2 清单在此
+基础上增加 `appearanceRegistry`。清单固定包含：
 
 - `kind = "themescheduler.install-backup"`；
-- `schemaVersion = 1`；
+- `schemaVersion = 1`（兼容读取）或 `2`（新建）；
 - 捕获时间、创建程序版本和 Windows build；
 - `AppsUseLightTheme` 的存在性、注册表类型和值；
 - 原活动主题路径；
 - 固定相对备份名 `install.theme`；
 - `install.theme` 的小写 SHA-256；
 - 原主题的 `AutoColorization`、`ColorizationColor`、`AppMode` 和 `SystemMode`。
+- schema v2 的 `AppsUseLightTheme`、`SystemUsesLightTheme`、Personalize
+  `ColorPrevalence` 和 DWM `ColorPrevalence` 精确存在性、类型和值。
 
-若 `AppsUseLightTheme` 原本不存在，则 `typeCode` 和 `data` 必须均为 `null`；若存在，则必须为 `REG_DWORD` 的 `0` 或 `1`。
+若任一值原本不存在，schema v2 保留 `exists=false`；恢复时必须重新删除由事务创建的
+值。旧 schema v1 保持原范围，不伪造安装时未捕获的三个字段。
 
 安装备份是首次安装恢复点：
 

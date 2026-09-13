@@ -47,6 +47,19 @@ class ManagedThemeFileTests(unittest.TestCase):
         self.assertEqual(managed.after.system_mode, "Dark")
         self.assertEqual(managed.after.colorization_color, 0xC4744DA9)
 
+    def test_build_can_target_app_and_windows_modes_together(self) -> None:
+        managed = build_managed_theme(
+            theme_bytes(),
+            0xC4744DA9,
+            app_mode="Light",
+            system_mode="Light",
+            theme_id=UUID("11111111-2222-3333-4444-555555555555"),
+        )
+
+        self.assertEqual(managed.before.system_mode, "Dark")
+        self.assertEqual(managed.after.app_mode, "Light")
+        self.assertEqual(managed.after.system_mode, "Light")
+
     def test_normalize_preserves_theme_identity(self) -> None:
         normalized = normalize_theme_visual_state(
             theme_bytes(),

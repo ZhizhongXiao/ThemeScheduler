@@ -5,10 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..accent_theme import (
-    ThemeVisualState,
     WindowsThemeApplyBackend,
     read_visual_state,
 )
+from ..appearance import CurrentWindowsAppearance, WindowsCurrentAppearanceReader
 from ..automation import WindowsAutoBackend
 from ..core import mutex_name_for_data_root
 from ..execution_lock import WindowsNamedMutexLock
@@ -54,10 +54,15 @@ def create_live_gui_api(
             lock_factory(),
         )
 
-    def current_appearance_reader() -> ThemeVisualState:
-        backend = WindowsThemeApplyBackend()
-        active_theme = backend.current_theme_path()
-        return read_visual_state(active_theme.read_bytes())
+    theme_backend = WindowsThemeApplyBackend()
+    live_appearance = WindowsCurrentAppearanceReader(
+        theme_visual_reader=lambda: read_visual_state(
+            theme_backend.current_theme_path().read_bytes()
+        )
+    )
+
+    def current_appearance_reader() -> CurrentWindowsAppearance:
+        return live_appearance.read()
 
     if not allow_live_writes:
         return GuiApi(

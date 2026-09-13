@@ -14,7 +14,7 @@ from theme_scheduler.accent_profile import (
     AccentProfileStore,
 )
 from theme_scheduler.accent_theme import read_visual_state
-from theme_scheduler.appearance import RegistryValue
+from theme_scheduler.appearance import AppearanceRegistrySnapshot, RegistryValue
 from theme_scheduler.backup import (
     InstallBackup,
     InstallBackupStore,
@@ -60,6 +60,32 @@ class ConfigContractTests(unittest.TestCase):
         self.assertEqual(AppConfig.from_dict(config.as_dict()), config)
         self.assertEqual(config.day_start, "06:15")
         self.assertEqual(config.night_start, "23:45")
+        self.assertEqual(config.day_system_theme, "light")
+        self.assertEqual(config.night_system_theme, "dark")
+        self.assertFalse(config.day_start_taskbar_accent)
+        self.assertTrue(config.night_start_taskbar_accent)
+
+    def test_version_1_config_loads_with_preserve_semantics(self) -> None:
+        legacy = {
+            "kind": "themescheduler.config",
+            "schemaVersion": 1,
+            "schedule": {"dayStart": "06:15", "nightStart": "23:45"},
+            "profiles": {
+                "day": {"appsTheme": "light"},
+                "night": {"appsTheme": "dark"},
+            },
+            "notifications": {"errors": True, "statusChanges": True},
+        }
+
+        config = AppConfig.from_dict(legacy)
+
+        self.assertIsNone(config.day_system_theme)
+        self.assertIsNone(config.night_system_theme)
+        self.assertIsNone(config.day_start_taskbar_accent)
+        self.assertIsNone(config.night_start_taskbar_accent)
+        self.assertIsNone(config.day_title_borders_accent)
+        self.assertIsNone(config.night_title_borders_accent)
+        self.assertEqual(config.as_dict()["schemaVersion"], 2)
 
     def test_unknown_field_is_rejected(self) -> None:
         payload = AppConfig.defaults().as_dict()
@@ -78,6 +104,25 @@ class ConfigContractTests(unittest.TestCase):
             AppConfig("6:15", "23:45", "light", "dark", True, True)
         with self.assertRaisesRegex(ConfigValidationError, "must differ"):
             AppConfig("06:15", "06:15", "light", "dark", True, True)
+
+    def test_complete_appearance_fields_are_strict_and_profile_scoped(self) -> None:
+        config = AppConfig.defaults()
+        self.assertEqual(
+            config.profile_appearance("night"),
+            ("dark", "dark", True, True),
+        )
+        with self.assertRaises(ValueError):
+            config.profile_appearance("unknown")
+
+        invalid_mode = config.as_dict()
+        invalid_mode["profiles"]["day"]["systemTheme"] = "sepia"
+        with self.assertRaisesRegex(ConfigValidationError, "systemTheme"):
+            AppConfig.from_dict(invalid_mode)
+
+        invalid_surface = config.as_dict()
+        invalid_surface["profiles"]["night"]["accentSurfaces"]["startTaskbar"] = 1
+        with self.assertRaisesRegex(ConfigValidationError, "boolean or null"):
+            AppConfig.from_dict(invalid_surface)
 
     def test_store_requires_explicit_initialization_and_valid_current_file(
         self,
@@ -184,7 +229,12 @@ class AccentProfileStoreTests(unittest.TestCase):
 
 
 class InstallBackupContractTests(unittest.TestCase):
-    def _backup(self, *, exists: bool = True) -> InstallBackup:
+    def _backup(
+        self,
+        *,
+        exists: bool = True,
+        complete: bool = False,
+    ) -> InstallBackup:
         theme = self._theme()
         return InstallBackup(
             captured_at="2026-07-23T21:00:00+08:00",
@@ -199,6 +249,20 @@ class InstallBackupContractTests(unittest.TestCase):
             colorization_color="0XC4FFB900",
             app_mode="Light",
             system_mode="Dark",
+            appearance_registry=(
+                AppearanceRegistrySnapshot(
+                    apps_theme=RegistryValue(
+                        exists,
+                        1 if exists else None,
+                        4 if exists else None,
+                    ),
+                    system_theme=RegistryValue(True, 0, 4),
+                    start_taskbar_accent=RegistryValue(True, 1, 4),
+                    title_borders_accent=RegistryValue(True, 0, 4),
+                )
+                if complete
+                else None
+            ),
         )
 
     @staticmethod
@@ -215,9 +279,23 @@ class InstallBackupContractTests(unittest.TestCase):
         )
 
     def test_present_and_missing_registry_states_round_trip(self) -> None:
-        for backup in (self._backup(), self._backup(exists=False)):
+        for backup in (
+            self._backup(),
+            self._backup(exists=False),
+            self._backup(complete=True),
+        ):
             with self.subTest(exists=backup.apps_value_exists):
                 self.assertEqual(InstallBackup.from_dict(backup.as_dict()), backup)
+        self.assertEqual(self._backup().as_dict()["schemaVersion"], 1)
+        self.assertEqual(self._backup(complete=True).as_dict()["schemaVersion"], 2)
+
+        inconsistent = deepcopy(self._backup(complete=True).as_dict())
+        inconsistent["activeTheme"]["systemMode"] = "Light"
+        with self.assertRaisesRegex(
+            InstallBackupValidationError,
+            "SystemUsesLightTheme",
+        ):
+            InstallBackup.from_dict(inconsistent)
 
     def test_manifest_binds_exact_install_theme_name(self) -> None:
         payload = self._backup().as_dict()
@@ -389,6 +467,50 @@ class InstallBackupContractTests(unittest.TestCase):
             recovery = read_visual_state(store.theme_path.read_bytes())
             self.assertEqual(recovery.app_mode, "Dark")
             self.assertEqual(recovery.colorization_color, 0xC4744DA9)
+
+    def test_live_capture_records_complete_appearance_snapshot(self) -> None:
+        class ThemeBackend:
+            def __init__(self, path: Path) -> None:
+                self.path = path
+
+            def current_theme_path(self) -> Path:
+                return self.path
+
+        snapshot = AppearanceRegistrySnapshot(
+            apps_theme=RegistryValue(False),
+            system_theme=RegistryValue(True, 0, 4),
+            start_taskbar_accent=RegistryValue(True, 0, 4),
+            title_borders_accent=RegistryValue(True, 1, 4),
+        )
+
+        class AppearanceBackend:
+            def capture(self) -> AppearanceRegistrySnapshot:
+                return snapshot
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "Custom.theme"
+            source.write_bytes(self._theme())
+            store = InstallBackupStore(
+                root / "backup" / "install.json",
+                root / "backup" / "install.theme",
+            )
+
+            captured = capture_install_backup(
+                store,
+                created_by_version="0.1.5",
+                windows_build="26200",
+                theme_backend=ThemeBackend(source),  # type: ignore[arg-type]
+                appearance_backend=AppearanceBackend(),  # type: ignore[arg-type]
+                colorization_reader=lambda: 0xC4744DA9,
+                timestamp="2026-09-13T12:00:00+08:00",
+            )
+
+            self.assertEqual(captured.appearance_registry, snapshot)
+            self.assertFalse(captured.apps_value_exists)
+            self.assertEqual(captured.system_mode, "Dark")
+            self.assertEqual(captured.as_dict()["schemaVersion"], 2)
+            self.assertEqual(store.load_verified(), captured)
 
     def test_live_capture_rejects_colorization_change_without_committing(
         self,

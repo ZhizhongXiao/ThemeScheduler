@@ -1,4 +1,4 @@
-"""Strict version-1 user configuration contract."""
+"""Strict, backward-compatible user configuration contract."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from .persistence import (
 )
 
 CONFIG_KIND = "themescheduler.config"
-CONFIG_SCHEMA_VERSION = 1
+CONFIG_SCHEMA_VERSION = 2
 THEME_MODES = frozenset({"light", "dark"})
 _TIME_PATTERN = re.compile(r"(?:[01]\d|2[0-3]):[0-5]\d")
 
@@ -45,6 +45,12 @@ class AppConfig:
     night_apps_theme: str
     notify_errors: bool
     notify_status_changes: bool
+    day_system_theme: str | None = None
+    night_system_theme: str | None = None
+    day_start_taskbar_accent: bool | None = None
+    night_start_taskbar_accent: bool | None = None
+    day_title_borders_accent: bool | None = None
+    night_title_borders_accent: bool | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.day_start, str) or not _TIME_PATTERN.fullmatch(
@@ -71,10 +77,69 @@ class AppConfig:
             raise ConfigValidationError("notifications.errors must be boolean.")
         if not isinstance(self.notify_status_changes, bool):
             raise ConfigValidationError("notifications.statusChanges must be boolean.")
+        for profile, value in (
+            ("day", self.day_system_theme),
+            ("night", self.night_system_theme),
+        ):
+            if value is not None and value not in THEME_MODES:
+                raise ConfigValidationError(
+                    f"profiles.{profile}.systemTheme is unsupported."
+                )
+        for location, value in (
+            ("profiles.day.accentSurfaces.startTaskbar", self.day_start_taskbar_accent),
+            (
+                "profiles.night.accentSurfaces.startTaskbar",
+                self.night_start_taskbar_accent,
+            ),
+            (
+                "profiles.day.accentSurfaces.titleBarsAndWindowBorders",
+                self.day_title_borders_accent,
+            ),
+            (
+                "profiles.night.accentSurfaces.titleBarsAndWindowBorders",
+                self.night_title_borders_accent,
+            ),
+        ):
+            if value is not None and not isinstance(value, bool):
+                raise ConfigValidationError(f"{location} must be boolean or null.")
 
     @classmethod
     def defaults(cls) -> AppConfig:
-        return cls("06:15", "23:45", "light", "dark", True, True)
+        return cls(
+            "06:15",
+            "23:45",
+            "light",
+            "dark",
+            True,
+            True,
+            day_system_theme="light",
+            night_system_theme="dark",
+            day_start_taskbar_accent=False,
+            night_start_taskbar_accent=True,
+            day_title_borders_accent=False,
+            night_title_borders_accent=True,
+        )
+
+    def profile_appearance(
+        self, profile: str
+    ) -> tuple[str, str | None, bool | None, bool | None]:
+        """Return the complete non-color appearance intent for one period."""
+
+        if profile == "day":
+            return (
+                self.day_apps_theme,
+                self.day_system_theme,
+                self.day_start_taskbar_accent,
+                self.day_title_borders_accent,
+            )
+        if profile == "night":
+            return (
+                self.night_apps_theme,
+                self.night_system_theme,
+                self.night_start_taskbar_accent,
+                self.night_title_borders_accent,
+            )
+        raise ValueError("Profile must be day or night.")
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -85,8 +150,22 @@ class AppConfig:
                 "nightStart": self.night_start,
             },
             "profiles": {
-                "day": {"appsTheme": self.day_apps_theme},
-                "night": {"appsTheme": self.night_apps_theme},
+                "day": {
+                    "appsTheme": self.day_apps_theme,
+                    "systemTheme": self.day_system_theme,
+                    "accentSurfaces": {
+                        "startTaskbar": self.day_start_taskbar_accent,
+                        "titleBarsAndWindowBorders": self.day_title_borders_accent,
+                    },
+                },
+                "night": {
+                    "appsTheme": self.night_apps_theme,
+                    "systemTheme": self.night_system_theme,
+                    "accentSurfaces": {
+                        "startTaskbar": self.night_start_taskbar_accent,
+                        "titleBarsAndWindowBorders": self.night_title_borders_accent,
+                    },
+                },
             },
             "notifications": {
                 "errors": self.notify_errors,
@@ -103,7 +182,8 @@ class AppConfig:
         )
         if payload.get("kind") != CONFIG_KIND:
             raise ConfigValidationError("JSON is not a ThemeScheduler config.")
-        if payload.get("schemaVersion") != CONFIG_SCHEMA_VERSION:
+        schema_version = payload.get("schemaVersion")
+        if schema_version not in {1, CONFIG_SCHEMA_VERSION}:
             raise ConfigValidationError("Unsupported config schemaVersion.")
         schedule = payload.get("schedule")
         profiles = payload.get("profiles")
@@ -128,8 +208,44 @@ class AppConfig:
         night = profiles.get("night")
         if not isinstance(day, Mapping) or not isinstance(night, Mapping):
             raise ConfigValidationError("Day and night profiles must be objects.")
-        _exact_keys(day, {"appsTheme"}, "config.profiles.day")
-        _exact_keys(night, {"appsTheme"}, "config.profiles.night")
+        if schema_version == 1:
+            _exact_keys(day, {"appsTheme"}, "config.profiles.day")
+            _exact_keys(night, {"appsTheme"}, "config.profiles.night")
+            day_system_theme = None
+            night_system_theme = None
+            day_start_taskbar_accent = None
+            night_start_taskbar_accent = None
+            day_title_borders_accent = None
+            night_title_borders_accent = None
+        else:
+            expected_profile = {"appsTheme", "systemTheme", "accentSurfaces"}
+            _exact_keys(day, expected_profile, "config.profiles.day")
+            _exact_keys(night, expected_profile, "config.profiles.night")
+            day_surfaces = day.get("accentSurfaces")
+            night_surfaces = night.get("accentSurfaces")
+            if not isinstance(day_surfaces, Mapping) or not isinstance(
+                night_surfaces, Mapping
+            ):
+                raise ConfigValidationError(
+                    "Day and night accentSurfaces must be objects."
+                )
+            expected_surfaces = {"startTaskbar", "titleBarsAndWindowBorders"}
+            _exact_keys(
+                day_surfaces,
+                expected_surfaces,
+                "config.profiles.day.accentSurfaces",
+            )
+            _exact_keys(
+                night_surfaces,
+                expected_surfaces,
+                "config.profiles.night.accentSurfaces",
+            )
+            day_system_theme = day.get("systemTheme")
+            night_system_theme = night.get("systemTheme")
+            day_start_taskbar_accent = day_surfaces.get("startTaskbar")
+            night_start_taskbar_accent = night_surfaces.get("startTaskbar")
+            day_title_borders_accent = day_surfaces.get("titleBarsAndWindowBorders")
+            night_title_borders_accent = night_surfaces.get("titleBarsAndWindowBorders")
         return cls(
             day_start=schedule.get("dayStart"),  # type: ignore[arg-type]
             night_start=schedule.get("nightStart"),  # type: ignore[arg-type]
@@ -139,6 +255,12 @@ class AppConfig:
             notify_status_changes=notifications.get(  # type: ignore[arg-type]
                 "statusChanges"
             ),
+            day_system_theme=day_system_theme,
+            night_system_theme=night_system_theme,
+            day_start_taskbar_accent=day_start_taskbar_accent,
+            night_start_taskbar_accent=night_start_taskbar_accent,
+            day_title_borders_accent=day_title_borders_accent,
+            night_title_borders_accent=night_title_borders_accent,
         )
 
 

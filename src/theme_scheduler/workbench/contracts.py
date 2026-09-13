@@ -16,7 +16,7 @@ from typing import (
 )
 
 from ..accent_profile import RgbColor
-from ..accent_theme import ThemeVisualState
+from ..appearance import CurrentWindowsAppearance
 from ..config import AppConfig
 from ..core import Clock, ExecutionLock
 from ..health_service import HealthService
@@ -50,7 +50,7 @@ class ManualAppearanceServiceFactory(Protocol):
 
 
 class CurrentAppearanceReader(Protocol):
-    def __call__(self) -> ThemeVisualState: ...
+    def __call__(self) -> CurrentWindowsAppearance: ...
 
 
 class ShellOpener(Protocol):
@@ -62,6 +62,12 @@ class ConfigSummary(TypedDict):
     nightStart: str
     dayAppsTheme: str
     nightAppsTheme: str
+    daySystemTheme: str | None
+    nightSystemTheme: str | None
+    dayStartTaskbarAccent: bool | None
+    nightStartTaskbarAccent: bool | None
+    dayTitleBordersAccent: bool | None
+    nightTitleBordersAccent: bool | None
     notifyErrors: bool
     notifyStatusChanges: bool
 
@@ -142,9 +148,15 @@ class HealthResult(OperationResult, total=False):
 class AppearanceResult(OperationResult, total=False):
     appMode: str
     systemMode: str
+    startTaskbarAccent: bool
+    titleBordersAccent: bool
     autoColorization: bool
     colorizationColor: str
     color: dict[str, int | str]
+    accentSource: str
+    sourcesDiverged: bool
+    divergences: list[str]
+    themeAppearance: dict[str, str | int] | None
 
 
 class OverviewResult(OperationResult):

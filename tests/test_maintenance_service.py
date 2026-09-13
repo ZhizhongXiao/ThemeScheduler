@@ -4,12 +4,14 @@ import hashlib
 import json
 import tempfile
 import unittest
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 from theme_scheduler.accent_service import AccentApplyOutcome
 from theme_scheduler.accent_theme import LiveThemeApplyError
+from theme_scheduler.appearance import AppearanceRegistrySnapshot, RegistryValue
 from theme_scheduler.backup import InstallBackup
 from theme_scheduler.maintenance_service import (
     MaintenanceRestoreResult,
@@ -87,7 +89,7 @@ class SaveCommitsThenRaises(SaveFailsBeforeCommit):
         raise OSError("late state save failure")
 
 
-def install_backup() -> InstallBackup:
+def install_backup(*, complete: bool = False) -> InstallBackup:
     theme = b"install theme evidence"
     return InstallBackup(
         captured_at="2026-07-25T08:00:00+08:00",
@@ -105,6 +107,16 @@ def install_backup() -> InstallBackup:
         colorization_color="0XC4744DA9",
         app_mode="Light",
         system_mode="Dark",
+        appearance_registry=(
+            AppearanceRegistrySnapshot(
+                apps_theme=RegistryValue(True, 1, 4),
+                system_theme=RegistryValue(True, 0, 4),
+                start_taskbar_accent=RegistryValue(True, 1, 4),
+                title_borders_accent=RegistryValue(True, 1, 4),
+            )
+            if complete
+            else None
+        ),
     )
 
 
@@ -139,7 +151,9 @@ class FakeAppearanceApplier:
             "autoColorization": "0",
             "colorizationColor": backup.colorization_color,
             "appMode": backup.app_mode,
-            "systemMode": "Dark",
+            "systemMode": (
+                backup.system_mode if backup.appearance_registry is not None else "Dark"
+            ),
         }
         actual = dict(target)
         if not self.preserve_system:
@@ -199,6 +213,27 @@ class MaintenanceServiceTests(unittest.TestCase):
             event["event"],
             "maintenance.appearance-restored",
         )
+
+    def test_complete_backup_verifies_restored_system_mode(self) -> None:
+        backup = install_backup(complete=True)
+        backup = replace(
+            backup,
+            system_mode="Light",
+            appearance_registry=AppearanceRegistrySnapshot(
+                apps_theme=RegistryValue(True, 1, 4),
+                system_theme=RegistryValue(True, 1, 4),
+                start_taskbar_accent=RegistryValue(True, 1, 4),
+                title_borders_accent=RegistryValue(True, 1, 4),
+            ),
+        )
+
+        outcome = self.service(
+            backup_store=FakeBackupStore(backup),
+        ).restore_install_appearance()
+
+        self.assertEqual(outcome.result, MaintenanceRestoreResult.RESTORED)
+        self.assertTrue(outcome.windows_verified)
+        self.assertTrue(outcome.system_mode_preserved)
 
     def test_locked_entry_does_not_reacquire_or_release_mutex(self) -> None:
         lock = FakeLock(acquire_error=True, release_error=True)

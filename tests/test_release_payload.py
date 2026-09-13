@@ -98,6 +98,7 @@ class ReleasePayloadTests(unittest.TestCase):
         self.assertIn("theme_manager_bridge.ps1", spec)
         self.assertIn("task_scheduler_bridge.ps1", spec)
         self.assertIn("notification_bridge.ps1", spec)
+        self.assertIn("current_appearance_bridge.ps1", spec)
         self.assertIn("shortcut_bridge.ps1", spec)
         self.assertIn("uninstall_cleanup.ps1", spec)
         uninstall_section = spec.split(

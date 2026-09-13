@@ -32,7 +32,7 @@ from theme_scheduler.core import AutoResultKind, RunIntent
 from theme_scheduler.initial_setup import (
     create_initial_setup_marker,
 )
-from theme_scheduler.persistence import atomic_write_json
+from theme_scheduler.persistence import atomic_write_json, load_json_object
 from theme_scheduler.state import AppState, StateStore
 from theme_scheduler.storage import UserDataLayout
 
@@ -153,6 +153,8 @@ class FakeWindows:
         self.apply_count = 0
         self.capture_count = 0
         self.rollback_count = 0
+        self.start_taskbar_accent = True
+        self.title_borders_accent = True
         self.before_by_transaction: dict[Path, ThemeVisualState] = {}
 
     def probe(self) -> None:
@@ -174,6 +176,9 @@ class FakeWindows:
         self,
         profile: AccentProfile,
         apps_theme: ThemeMode,
+        system_theme: ThemeMode | None,
+        start_taskbar_accent: bool | None,
+        title_borders_accent: bool | None,
         transaction_directory: Path,
     ) -> AccentApplyOutcome:
         self.apply_count += 1
@@ -182,8 +187,16 @@ class FakeWindows:
             "1" if profile.auto_colorization else "0",
             profile.colorization_color,
             apps_theme.value.title(),
-            before.system_mode,
+            (
+                system_theme.value.title()
+                if system_theme is not None
+                else before.system_mode
+            ),
         )
+        if start_taskbar_accent is not None:
+            self.start_taskbar_accent = start_taskbar_accent
+        if title_borders_accent is not None:
+            self.title_borders_accent = title_borders_accent
         transaction_directory = transaction_directory.resolve()
         self.before_by_transaction[transaction_directory] = before
         before_path = transaction_directory / "before.theme"
@@ -234,6 +247,31 @@ class FakeWindows:
 
     def read_visual_state(self) -> ThemeVisualState:
         return self.current
+
+    def verify_transaction_target(
+        self,
+        transaction_directory: Path,
+        expected: ThemeVisualState,
+    ) -> tuple[str, ...]:
+        failures: list[str] = []
+        if self.current != expected:
+            failures.append("theme mismatch")
+        journal = load_json_object(transaction_directory / "journal.json")
+        target = journal.get("settingsTarget")
+        if isinstance(target, dict):
+            start_taskbar = target.get("startTaskbarAccent")
+            title_borders = target.get("titleBordersAccent")
+            if (
+                start_taskbar is not None
+                and start_taskbar is not self.start_taskbar_accent
+            ):
+                failures.append("start/taskbar accent mismatch")
+            if (
+                title_borders is not None
+                and title_borders is not self.title_borders_accent
+            ):
+                failures.append("title/borders accent mismatch")
+        return tuple(failures)
 
     def rollback(self, transaction_directory: Path) -> bool:
         self.rollback_count += 1
@@ -326,7 +364,7 @@ class AutoRunnerTests(unittest.TestCase):
             intent=intent,
         )
 
-    def test_cross_profile_run_learns_applies_commits_and_logs(self) -> None:
+    def test_cross_profile_run_applies_without_learning_and_commits(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             layout = self._layout(Path(directory))
             windows = self._windows()
@@ -335,9 +373,12 @@ class AutoRunnerTests(unittest.TestCase):
             outcome = self._runner(layout, windows, log=log).run()
 
             self.assertIs(outcome.result, AutoResultKind.APPLIED)
-            self.assertEqual(outcome.learned_profile, "night")
+            self.assertIsNone(outcome.learned_profile)
+            self.assertEqual(windows.capture_count, 0)
             self.assertEqual(windows.current.app_mode, "Light")
-            self.assertEqual(windows.current.system_mode, "Dark")
+            self.assertEqual(windows.current.system_mode, "Light")
+            self.assertFalse(windows.start_taskbar_accent)
+            self.assertFalse(windows.title_borders_accent)
             self.assertEqual(windows.current.colorization_color, 0xC4744DA9)
             state = StateStore(layout.state).load()
             self.assertEqual(state.active_profile, "day")
@@ -597,6 +638,17 @@ class AutoRunnerTests(unittest.TestCase):
             )
             target = ThemeVisualState("0", 0xC4744DA9, "Light", "Dark")
             windows.current = target
+            atomic_write_json(
+                transaction_dir / "journal.json",
+                {
+                    "kind": "themescheduler.accent-transaction",
+                    "schemaVersion": 1,
+                    "status": "applied",
+                    "before": target.as_dict(),
+                    "target": target.as_dict(),
+                    "actual": target.as_dict(),
+                },
+            )
             store = AutoTransactionStore(transaction_dir / "auto.json")
             planned = store.create(
                 AutoTransaction(
@@ -627,6 +679,59 @@ class AutoRunnerTests(unittest.TestCase):
             self.assertNotEqual(StateStore(layout.state).load(), before_state)
             self.assertEqual(StateStore(layout.state).load().active_profile, "day")
             self.assertEqual(store.load().status, "completed")
+
+    def test_windows_verified_recovery_rejects_accent_surface_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            layout = self._layout(Path(directory))
+            state_before = StateStore(layout.state).load()
+            windows = self._windows()
+            transaction_dir = layout.new_transaction_directory(NOW)
+            transaction_dir.mkdir()
+            after_state = AppState(False, "day", NOW_TEXT, "day", "success")
+            target = ThemeVisualState("0", 0xC4744DA9, "Light", "Dark")
+            windows.current = target
+            windows.start_taskbar_accent = False
+            atomic_write_json(
+                transaction_dir / "journal.json",
+                {
+                    "kind": "themescheduler.accent-transaction",
+                    "schemaVersion": 2,
+                    "status": "applied",
+                    "before": target.as_dict(),
+                    "target": target.as_dict(),
+                    "actual": target.as_dict(),
+                    "settingsTarget": {
+                        "appsTheme": "light",
+                        "systemTheme": "dark",
+                        "startTaskbarAccent": True,
+                        "titleBordersAccent": True,
+                    },
+                },
+            )
+            store = AutoTransactionStore(transaction_dir / "auto.json")
+            planned = store.create(
+                AutoTransaction(
+                    transaction_id=transaction_dir.name,
+                    status="planned",
+                    started_at=NOW_TEXT,
+                    updated_at=NOW_TEXT,
+                    target_profile="day",
+                    target_apps_theme="light",
+                    learn_profile=None,
+                    state_before_sha256=file_sha256(layout.state),
+                    state_after=after_state,
+                    state_after_sha256=json_document_sha256(after_state.as_dict()),
+                )
+            )
+            store.save(
+                replace(planned, status="windows-verified", windows_target=target)
+            )
+
+            outcome = self._runner(layout, windows).run()
+
+            self.assertIs(outcome.result, AutoResultKind.DATA_UNTRUSTED)
+            self.assertEqual(StateStore(layout.state).load(), state_before)
+            self.assertIn("start/taskbar accent mismatch", outcome.message)
 
     def test_planned_with_applied_accent_journal_is_recovered(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

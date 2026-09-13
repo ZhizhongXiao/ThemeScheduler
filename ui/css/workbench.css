@@ -2061,6 +2061,86 @@ body { overflow: hidden; }
 .settings-form .workspace-result { margin: 4px 0 7px; }
 .settings-form .command-bar { position: static; min-height: 58px; margin-top: 0; }
 
+/* 0.1.5: one complete, explicit appearance plan per boundary. */
+.appearance-mode-stack {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.appearance-mode-stack .binary-toggle { margin-top: 5px; }
+.binary-toggle.is-unset {
+  border-style: dashed;
+  opacity: 0.78;
+}
+.binary-toggle.is-unset i { opacity: 0; }
+.accent-surface-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 9px 0 0;
+  padding: 8px 10px 9px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface-quiet);
+}
+.accent-surface-options legend {
+  padding: 0 5px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.accent-surface-options .switch-label {
+  min-width: 0;
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 11px;
+}
+.accent-surface-options .switch-label input {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  margin: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  appearance: none;
+  background: var(--surface-raised);
+  cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+.accent-surface-options .switch-label input::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--muted);
+  content: "";
+  transition: transform 160ms ease, background-color 140ms ease;
+}
+.accent-surface-options .switch-label input:checked {
+  border-color: var(--purple-bright);
+  background: rgba(var(--purple-rgb), 0.24);
+}
+.accent-surface-options .switch-label input:checked::after {
+  background: var(--purple-bright);
+  transform: translateX(14px);
+}
+.accent-surface-options .switch-label input:indeterminate {
+  border-style: dashed;
+  opacity: 0.72;
+}
+.accent-surface-options .switch-label input:focus-visible {
+  outline: 2px solid var(--purple-bright);
+  outline-offset: 2px;
+}
+
+@media (max-width: 1100px) {
+  .detail-time-mode { grid-template-columns: minmax(110px, 0.7fr) minmax(0, 1.3fr); }
+  .accent-surface-options { grid-template-columns: 1fr; }
+}
+
 /* The editing boundary owns the dial palette, independent of GUI theme. */
 .interactive-dial-host .clock-face,
 .interactive-dial-host .clock-tick,

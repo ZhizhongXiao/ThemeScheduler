@@ -16,6 +16,7 @@
 | 任务 | 首选文档 |
 | --- | --- |
 | 当前状态与待办 | [BACKLOG.md](BACKLOG.md) |
+| 1.0 阶段计划与完成定义 | [ROADMAP_1.0.md](ROADMAP_1.0.md) |
 | 模块职责与数据流 | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | 用户行为与产品边界 | [DESIGN.md](DESIGN.md) |
 | 类型、依赖、复杂度和 GUI 工程质量 | [CODE_QUALITY.md](CODE_QUALITY.md) |
@@ -31,9 +32,12 @@
 | 产物保留与清理 | [ARTIFACTS.md](ARTIFACTS.md) |
 | 测试命令与层级 | [TESTING.md](TESTING.md) |
 
-当前正式版本为 `0.1.3`。最终门禁、双构建、Defender 和变更驱动的开发机验收
-均由冻结证据记录；0.1.2 的无 Python Windows x64 TS-142 兼容性证据继续有效。
-正式发布位于 `artifacts/releases/0.1.3`。
+当前正式版本为 `0.1.3`，正式发布位于 `artifacts/releases/0.1.3`。当前源码为
+`0.1.5` 功能候选，支持昼夜完整外观并取消自动学习；自动门禁、双构建和 Defender
+及完整外观人工矩阵已经通过，现为 1.0 冻结功能基线。后续按
+[1.0 路线](ROADMAP_1.0.md)完成测试整理、高风险分支、strict 和任务桥测量，再重新
+构建 `1.0.0`。0.1.2 的无 Python
+Windows x64 TS-142 兼容性证据继续有效。
 
 ## 测试选择
 

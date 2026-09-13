@@ -142,11 +142,6 @@ def _offline_plan(layout: UserDataLayout, instant: datetime) -> dict[str, Any]:
             target_profile,
         ).load()
         profile_status = profile.as_dict()
-    if plan.learn_profile is not None:
-        AccentProfileStore(
-            layout.profile_path(plan.learn_profile),
-            plan.learn_profile,
-        ).load()
     return {
         "dataRoot": str(layout.root.resolve()),
         "at": instant.isoformat(timespec="seconds"),
@@ -154,7 +149,10 @@ def _offline_plan(layout: UserDataLayout, instant: datetime) -> dict[str, Any]:
             "kind": plan.kind.value,
             "targetProfile": target_profile,
             "targetAppsTheme": plan.target_apps_theme,
-            "learnProfile": plan.learn_profile,
+            "targetSystemTheme": plan.target_system_theme,
+            "targetStartTaskbarAccent": plan.target_start_taskbar_accent,
+            "targetTitleBordersAccent": plan.target_title_borders_accent,
+            "learnProfile": None,
         },
         "targetAccentProfile": profile_status,
         "windowsChanged": False,

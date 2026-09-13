@@ -150,15 +150,29 @@ uv run --group quality python tools/test.py coverage
 逐模块基线已写入 `tests/coverage_baseline.json`，`coverage_guard.py check` 通过。
 基线本身属于生成的质量棘轮，不参与被测源码身份计算，避免首次冻结后自失效。
 
-当前 M17 结项报告覆盖 109 个 Python 文件、10,653 条可执行语句：573 项
-测试全绿，行覆盖率 80.1%、分支覆盖率 61.4%、Coverage.py 综合覆盖率 75.9%，
-`coverage_guard.py check` 通过。正式基线保留首次冻结值，只作为不回退下限，不因
-后续提升自动改写。新增的跨模块时间戳契约测试覆盖 Python 3.12
-尾部 `Z`、显式时区与无效输入，消除语法精简对逐模块棘轮的假性回退。
+当前 0.1.5 RC2 报告覆盖 108 个 Python 文件、10,421 条可执行语句：577 项测试
+全绿，8,537 条语句和 1,902/3,050 个分支被覆盖，Coverage.py 综合覆盖率约
+77.5%，`coverage_guard.py check` 通过。正式基线保留首次冻结值，只作为不回退下限，
+不因后续提升自动改写。
 
 当前最低覆盖区域主要集中在 GUI 启动、Explorer 恢复、源码 CLI 和 Windows 组合
 适配器。后续按故障风险补分支测试，不为提高总百分比机械测试简单数据类；测试目录
 重组也在正式基线冻结后进行，避免同时改变测量工具和发现规则。
+
+### 3.2 1.0 质量收口
+
+当前 67 个 `test_*.py` 仍平铺在 `tests/` 根目录。1.0 先完成 0.1.5 功能验收，再把
+测试分为 `unit/integration/release`，同时调整发现规则并证明迁移前后无漏测、无重复。
+目录整理本身不改变 Coverage 的生产源码范围或逐模块棘轮。
+
+目录稳定后补 GUI 启动、Explorer 恢复、Windows 组合适配器和 Task Scheduler 错误
+分支。随后以单文件为单位评估 `configuration_service.py`、
+`maintenance_service.py`、`automation/backend.py`、`scheduled_auto.py` 和
+`accent_service.py`；只有 strict 零诊断的文件才加入 `[tool.pyright].strict`。
+
+任务桥只先建立只读耗时基线。没有达到 [ROADMAP_1.0.md](ROADMAP_1.0.md) 的性能
+阈值时，维持现有每次启动隔离 PowerShell 进程的实现是合格结论；不把无数据的批量
+桥接当作代码质量提升。
 
 ## 4. 自动验证
 
