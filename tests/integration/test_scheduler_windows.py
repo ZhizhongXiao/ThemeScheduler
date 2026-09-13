@@ -17,7 +17,7 @@ from theme_scheduler.scheduler_windows import (
 )
 
 BRIDGE = (
-    Path(__file__).resolve().parents[1] / "entrypoints" / "task_scheduler_bridge.ps1"
+    Path(__file__).resolve().parents[2] / "entrypoints" / "task_scheduler_bridge.ps1"
 )
 EXECUTABLE = (
     r"C:\Users\Example\AppData\Local\Programs"

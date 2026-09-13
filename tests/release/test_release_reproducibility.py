@@ -4,7 +4,7 @@ import importlib.util
 import unittest
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MODULE_PATH = PROJECT_ROOT / "packaging" / "reproducible_pyinstaller.py"
 SPEC = importlib.util.spec_from_file_location(
     "themescheduler_reproducible_pyinstaller",

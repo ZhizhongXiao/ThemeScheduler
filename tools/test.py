@@ -22,6 +22,8 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TEST_ROOT = PROJECT_ROOT / "tests"
+TEST_CATEGORIES = ("unit", "integration", "release")
+TEST_CATEGORY_ROOTS = tuple(TEST_ROOT / name for name in TEST_CATEGORIES)
 REPORT_ROOT = PROJECT_ROOT / "artifacts" / "test-reports"
 QUALITY_ROOT = PROJECT_ROOT / "artifacts" / "quality"
 COVERAGE_JSON = QUALITY_ROOT / "coverage.json"
@@ -312,17 +314,18 @@ def build_suite(patterns: Sequence[str]) -> unittest.TestSuite:
     selected: list[unittest.TestCase] = []
     seen: set[str] = set()
     for pattern in patterns:
-        discovered = loader.discover(
-            str(TEST_ROOT),
-            pattern=pattern,
-            top_level_dir=str(PROJECT_ROOT),
-        )
-        for test in _flatten(discovered):
-            identity = test.id()
-            if identity in seen:
-                continue
-            seen.add(identity)
-            selected.append(test)
+        for category_root in TEST_CATEGORY_ROOTS:
+            discovered = loader.discover(
+                str(category_root),
+                pattern=pattern,
+                top_level_dir=str(PROJECT_ROOT),
+            )
+            for test in _flatten(discovered):
+                identity = test.id()
+                if identity in seen:
+                    continue
+                seen.add(identity)
+                selected.append(test)
     return unittest.TestSuite(selected)
 
 

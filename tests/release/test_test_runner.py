@@ -9,13 +9,14 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from tools import test as test_runner
 from tools.test import (
     GROUPS,
+    TEST_CATEGORY_ROOTS,
     build_suite,
     coverage_commands,
     release_quality_commands,
@@ -24,6 +25,18 @@ from tools.test import (
 
 
 class LayeredTestRunnerTests(unittest.TestCase):
+    def test_discovery_roots_are_the_three_scoped_test_packages(self) -> None:
+        self.assertEqual(
+            tuple(
+                path.relative_to(PROJECT_ROOT).as_posix()
+                for path in TEST_CATEGORY_ROOTS
+            ),
+            ("tests/unit", "tests/integration", "tests/release"),
+        )
+        self.assertTrue(
+            all((path / "__init__.py").is_file() for path in TEST_CATEGORY_ROOTS)
+        )
+
     def test_integration_full_and_release_select_complete_suite(self) -> None:
         self.assertEqual(
             resolve_patterns("integration", None),

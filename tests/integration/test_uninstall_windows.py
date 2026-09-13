@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 from theme_scheduler.lifecycle import InstallLayout
 from theme_scheduler.uninstall_contracts import (

@@ -161,9 +161,10 @@ uv run --group quality python tools/test.py coverage
 
 ### 3.2 1.0 质量收口
 
-当前 67 个 `test_*.py` 仍平铺在 `tests/` 根目录。1.0 先完成 0.1.5 功能验收，再把
-测试分为 `unit/integration/release`，同时调整发现规则并证明迁移前后无漏测、无重复。
-目录整理本身不改变 Coverage 的生产源码范围或逐模块棘轮。
+67 个 `test_*.py` 已分为 `unit/integration/release` 三个测试包，数量分别为
+24、32、11；`tools/test.py` 显式遍历三个发现根。迁移前冻结的 577 项测试在所有
+quick/affected、integration 和 release 模式中均无漏测、无重复，新增目录与发现
+契约后为 579 项。目录整理未改变 Coverage 的生产源码范围或逐模块棘轮。
 
 目录稳定后补 GUI 启动、Explorer 恢复、Windows 组合适配器和 Task Scheduler 错误
 分支。随后以单文件为单位评估 `configuration_service.py`、
@@ -183,8 +184,8 @@ python tools/test.py integration
 uv run --group quality python tools/test.py coverage
 ```
 
-`tests/test_errors.py` 自动发现产品源码中的自定义异常并校验根类；
-`tests/test_quality_contracts.py` 校验单一调度协议、热点入口长度、Workbench
+`tests/unit/test_errors.py` 自动发现产品源码中的自定义异常并校验根类；
+`tests/release/test_quality_contracts.py` 校验测试目录结构、单一调度协议、热点入口长度、Workbench
 稳定字段、内部依赖无环，以及 Pyright 全源码/strict 棘轮只有一个 TOML 配置来源。
 
 当前 Pyright 为零诊断，Ruff lint/format 通过；最终 integration、Coverage 守卫与

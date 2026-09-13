@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 from tests.fixtures.appearance_settings import ScriptedAppearanceSettings
 from theme_scheduler.accent_profile import (

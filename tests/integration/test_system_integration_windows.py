@@ -25,7 +25,7 @@ from theme_scheduler.system_integration_windows import (
     WindowsSystemIntegrationError,
 )
 
-BRIDGE = Path(__file__).resolve().parents[1] / "entrypoints" / "shortcut_bridge.ps1"
+BRIDGE = Path(__file__).resolve().parents[2] / "entrypoints" / "shortcut_bridge.ps1"
 
 
 class FakeKey:

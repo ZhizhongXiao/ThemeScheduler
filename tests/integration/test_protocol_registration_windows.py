@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from tests.test_system_integration_windows import FakeWinReg
+from tests.integration.test_system_integration_windows import FakeWinReg
 from theme_scheduler.protocol_registration import (
     ProtocolRegistration,
     RegistryTreeBackup,

@@ -33,16 +33,15 @@ python tools/test.py release
 
 0.1.5 完整外观实机矩阵已经通过；现按 [ROADMAP_1.0.md](ROADMAP_1.0.md)依次执行：
 
-1. 将当前平铺测试迁移到 `tests/unit`、`tests/integration` 和 `tests/release`；
-2. 同步 `tools/test.py` 的分组与递归发现规则，保持 quick/affected 的功能簇语义；
+1. **已完成**：测试迁移到 `tests/unit`、`tests/integration` 和 `tests/release`；
+2. **已完成**：`tools/test.py` 显式遍历三个测试包，保持 quick/affected 的功能簇语义；
 3. 补 GUI 启动、Explorer 恢复、Windows 组合适配器和任务桥失败分支；
 4. 在新增安全网下逐文件扩大 Pyright strict；
 5. 最后建立任务桥只读性能基线。
 
-目录迁移必须先记录迁移前测试集合。迁移后测试数量不得下降，不能重复发现同一
-测试；integration、coverage 和 release 必须全部通过，Coverage 的生产源码范围和
-逐模块下限保持不变。读取具体测试文件路径的契约、Ruff 逐文件豁免、发布源码清单
-及 `MANIFEST.in` 必须随迁移核对。
+迁移前记录已保存为忽略的质量证据；迁移后的全部模式无原测试缺失或重复，且根目录
+不再接受 `test_*.py`。Ruff 逐文件规则已递归化，发布源码清单继续递归纳入测试，
+`MANIFEST.in` 无需列举测试子包。Coverage 的生产源码范围和逐模块下限保持不变。
 
 高风险测试以故障是否会造成系统误写、丢失恢复点、遗漏任务或留下进程为排序依据。
 真实 Windows API 难以稳定自动化时，优先使用结构化 Fake/Mock 固定输入、调用顺序、

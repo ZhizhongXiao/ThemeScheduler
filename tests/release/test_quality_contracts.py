@@ -7,7 +7,7 @@ import tomllib
 import unittest
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SOURCE_ROOT = PROJECT_ROOT / "src"
 
 from theme_scheduler.automation.runner import AutoRunner
@@ -135,11 +135,20 @@ class QualityContractTests(unittest.TestCase):
     def test_test_modules_do_not_inject_the_source_root(self) -> None:
         bootstrap = "sys.path.insert" + "(0, str(SOURCE_ROOT))"
         offenders = [
-            path.name
-            for path in (PROJECT_ROOT / "tests").glob("test_*.py")
+            path.relative_to(PROJECT_ROOT).as_posix()
+            for path in (PROJECT_ROOT / "tests").rglob("test_*.py")
             if bootstrap in path.read_text(encoding="utf-8")
         ]
         self.assertEqual(offenders, [])
+
+    def test_test_modules_are_grouped_by_scope(self) -> None:
+        test_root = PROJECT_ROOT / "tests"
+        self.assertEqual(list(test_root.glob("test_*.py")), [])
+        for category in ("unit", "integration", "release"):
+            with self.subTest(category=category):
+                directory = test_root / category
+                self.assertTrue((directory / "__init__.py").is_file())
+                self.assertTrue(any(directory.glob("test_*.py")))
 
     def test_internal_module_dependencies_are_acyclic(self) -> None:
         self.assertEqual(dependency_cycles(internal_dependency_graph()), [])

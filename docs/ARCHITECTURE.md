@@ -281,6 +281,13 @@ ThemeScheduler/
 │  └─ 其他受管 Windows 桥接脚本
 ├─ assets/
 ├─ tests/
+│  ├─ unit/        # 纯模型、解析和确定性服务
+│  ├─ integration/ # 跨组件、GUI 契约和 Windows 适配器模拟
+│  ├─ release/     # 打包、仓库结构和质量门禁
+│  ├─ fixtures/    # 领域专用 Fake
+│  ├─ ui/          # Node/DOM 测试资源
+│  ├─ _support.py
+│  └─ coverage_baseline.json
 ├─ build/
 ├─ pyproject.toml
 ├─ README.md

@@ -5,7 +5,7 @@ import subprocess
 import unittest
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = PROJECT_ROOT / "tools" / "clean_machine_check.ps1"
 CHECKLIST = PROJECT_ROOT / "docs" / "CLEAN_MACHINE_ACCEPTANCE.md"
 

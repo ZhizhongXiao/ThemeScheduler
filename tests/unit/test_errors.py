@@ -5,7 +5,7 @@ import unittest
 from importlib import import_module
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SOURCE_ROOT = PROJECT_ROOT / "src"
 PACKAGE_ROOT = SOURCE_ROOT / "theme_scheduler"
 

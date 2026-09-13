@@ -7,7 +7,7 @@ import unittest
 from html.parser import HTMLParser
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 UI_ROOT = PROJECT_ROOT / "ui"
 HTML_ROOT = UI_ROOT / "html"
 CSS_ROOT = UI_ROOT / "css"

@@ -68,8 +68,8 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*.py" = ["E402"]
-"tests/test_system_integration_windows.py" = ["N802"]
+"tests/**/*.py" = ["E402"]
+"tests/integration/test_system_integration_windows.py" = ["N802"]
 
 [tool.ruff.format]
 quote-style = "double"
