@@ -383,8 +383,13 @@ def rollback_accent_transaction(
 
     theme_backend = backend or WindowsThemeApplyBackend()
     theme_restored = False
+    try:
+        actual = read_visual_state(theme_backend.current_theme_path().read_bytes())
+        theme_restored = actual == expected
+    except Exception:
+        theme_restored = False
     manager = journal.get("themeManager")
-    if isinstance(manager, dict):
+    if not theme_restored and isinstance(manager, dict):
         before_index = manager.get("indexBefore")
         if isinstance(before_index, int) and not isinstance(before_index, bool):
             try:

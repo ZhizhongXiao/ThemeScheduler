@@ -300,6 +300,90 @@ class AccentServiceTests(unittest.TestCase):
             self.assertTrue(settings.start_taskbar)
             self.assertTrue(settings.title_borders)
 
+    def test_partial_registry_write_is_rolled_back_before_theme_application(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            active = root / "active.theme"
+            active.write_bytes(_theme_bytes())
+            layout = UserDataLayout(root / "data")
+            backend = DynamicThemeBackend(active)
+            settings = ScriptedAppearanceSettings(
+                backend,
+                fail_write_after_start=True,
+            )
+            profile = AccentProfile(
+                "day",
+                "2026-09-13T12:00:00+08:00",
+                False,
+                0xC400A5D8,
+                "26200",
+            )
+
+            with self.assertRaises(LiveThemeApplyError) as raised:
+                apply_accent_profile(
+                    profile,
+                    layout,
+                    apps_theme=ThemeMode.LIGHT,
+                    system_theme=ThemeMode.DARK,
+                    start_taskbar_accent=False,
+                    title_borders_accent=False,
+                    backend=backend,
+                    appearance_backend=settings,
+                    settle_seconds=0,
+                )
+
+            self.assertTrue(raised.exception.rollback_succeeded)
+            self.assertEqual(backend.current_theme_path(), active)
+            self.assertTrue(settings.start_taskbar)
+            self.assertTrue(settings.title_borders)
+            self.assertEqual(settings.restore_calls, 1)
+
+    def test_secondary_registry_rollback_failure_is_reported_as_partial(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            active = root / "active.theme"
+            active.write_bytes(_theme_bytes())
+            layout = UserDataLayout(root / "data")
+            backend = DynamicThemeBackend(active)
+            settings = ScriptedAppearanceSettings(
+                backend,
+                fail_verify=True,
+                fail_restore=True,
+            )
+            profile = AccentProfile(
+                "night",
+                "2026-09-13T23:45:00+08:00",
+                False,
+                0xC4744DA9,
+                "26200",
+            )
+
+            with self.assertRaises(LiveThemeApplyError) as raised:
+                apply_accent_profile(
+                    profile,
+                    layout,
+                    apps_theme=ThemeMode.DARK,
+                    system_theme=ThemeMode.LIGHT,
+                    start_taskbar_accent=False,
+                    title_borders_accent=True,
+                    backend=backend,
+                    appearance_backend=settings,
+                    settle_seconds=0,
+                )
+
+            self.assertFalse(raised.exception.rollback_succeeded)
+            self.assertEqual(backend.current_theme_path(), active)
+            journal = json.loads(
+                (next(layout.runtime.glob("accent-*")) / "journal.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertFalse(journal["rollbackSucceeded"])
+
     def test_install_restore_uses_current_theme_and_preserves_system_mode(
         self,
     ) -> None:

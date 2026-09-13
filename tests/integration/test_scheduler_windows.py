@@ -185,6 +185,21 @@ class WindowsSchedulerBackendTests(unittest.TestCase):
         with self.assertRaisesRegex(TaskSchedulerBridgeError, "timed out"):
             self.backend.probe()
 
+    @patch("theme_scheduler.scheduler_windows.subprocess.run")
+    def test_access_denied_preserves_hresult_and_operation_context(self, run) -> None:
+        run.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=1,
+            stdout="",
+            stderr=("Access is denied. HRESULT:0x80070005 UnauthorizedAccessException"),
+        )
+
+        with self.assertRaisesRegex(
+            TaskSchedulerBridgeError,
+            "0x80070005.*UnauthorizedAccessException",
+        ):
+            self.backend.register(self.task)
+
     def test_bridge_script_has_scoped_task_and_future_boundary_guards(self) -> None:
         script = BRIDGE.read_text(encoding="utf-8")
 

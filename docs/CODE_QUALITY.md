@@ -166,8 +166,10 @@ uv run --group quality python tools/test.py coverage
 quick/affected、integration 和 release 模式中均无漏测、无重复，新增目录与发现
 契约后为 579 项。目录整理未改变 Coverage 的生产源码范围或逐模块棘轮。
 
-目录稳定后补 GUI 启动、Explorer 恢复、Windows 组合适配器和 Task Scheduler 错误
-分支。随后以单文件为单位评估 `configuration_service.py`、
+目录稳定后已新增 12 项 GUI 启动、Explorer 恢复、Windows 组合适配器和 Task
+Scheduler 错误分支测试。该安全网发现并修复了一项准备阶段回滚缺陷：主题未改变时
+不再重复应用事务备份，只恢复发生部分写入的外观注册表。随后以单文件为单位评估
+`configuration_service.py`、
 `maintenance_service.py`、`automation/backend.py`、`scheduled_auto.py` 和
 `accent_service.py`；只有 strict 零诊断的文件才加入 `[tool.pyright].strict`。
 

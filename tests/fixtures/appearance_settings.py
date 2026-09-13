@@ -18,11 +18,15 @@ class ScriptedAppearanceSettings:
         start_taskbar: bool = True,
         title_borders: bool = True,
         fail_verify: bool = False,
+        fail_write_after_start: bool = False,
+        fail_restore: bool = False,
     ) -> None:
         self.theme_backend = theme_backend
         self.start_taskbar = start_taskbar
         self.title_borders = title_borders
         self.fail_verify = fail_verify
+        self.fail_write_after_start = fail_write_after_start
+        self.fail_restore = fail_restore
         self.write_calls = 0
         self.restore_calls = 0
 
@@ -56,6 +60,8 @@ class ScriptedAppearanceSettings:
         self.write_calls += 1
         if start_taskbar is not None:
             self.start_taskbar = start_taskbar
+        if self.fail_write_after_start:
+            raise OSError("injected second appearance write failure")
         if title_borders is not None:
             self.title_borders = title_borders
 
@@ -80,6 +86,8 @@ class ScriptedAppearanceSettings:
 
     def restore(self, snapshot: AppearanceRegistrySnapshot) -> None:
         self.restore_calls += 1
+        if self.fail_restore:
+            raise OSError("injected appearance rollback failure")
         self.start_taskbar = bool(snapshot.start_taskbar_accent.data)
         self.title_borders = bool(snapshot.title_borders_accent.data)
         if self.capture() != snapshot:

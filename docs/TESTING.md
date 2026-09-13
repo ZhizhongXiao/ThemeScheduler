@@ -35,7 +35,7 @@ python tools/test.py release
 
 1. **已完成**：测试迁移到 `tests/unit`、`tests/integration` 和 `tests/release`；
 2. **已完成**：`tools/test.py` 显式遍历三个测试包，保持 quick/affected 的功能簇语义；
-3. 补 GUI 启动、Explorer 恢复、Windows 组合适配器和任务桥失败分支；
+3. **已完成**：补 GUI 启动、Explorer 恢复、Windows 组合适配器和任务桥失败分支；
 4. 在新增安全网下逐文件扩大 Pyright strict；
 5. 最后建立任务桥只读性能基线。
 
@@ -46,6 +46,11 @@ python tools/test.py release
 高风险测试以故障是否会造成系统误写、丢失恢复点、遗漏任务或留下进程为排序依据。
 真实 Windows API 难以稳定自动化时，优先使用结构化 Fake/Mock 固定输入、调用顺序、
 超时、隐藏窗口参数、错误类型和回滚结果，不为提高总覆盖率机械测试简单数据类。
+
+阶段 C 的直接入口是 `tests/integration/test_gui_runtime.py`、
+`tests/integration/test_explorer_recovery.py`、完整外观事务测试和
+`tests/integration/test_scheduler_windows.py`；这些测试不执行真实 Explorer 重启、
+任务写入或 Windows 外观写入。
 
 任务桥性能测量不进入普通 integration。基准必须单独记录环境、预热、样本数、p50、
 p95 和最大值；默认只读现有产品任务。只有完整健康检查 p50 超过 1 秒且多进程启动
