@@ -11,9 +11,11 @@
   位置，并取消自动边界学习；
 - `0.1.5 RC2` 已通过 577 项 release 测试、Coverage 棘轮、连续双构建、PE/payload
   校验、Defender 扫描和完整外观人工实机矩阵；
-- 67 个 `test_*.py` 已按 `unit/integration/release` 归类，发现规则显式限定三个
-  测试包；全源码采用 Pyright basic，十二个高价值模块进入 strict；任务计划桥尚无
-  性能基线。
+- 原 67 个 `test_*.py` 已按 `unit/integration/release` 迁移，当前为 70 个测试模块；
+  发现规则显式限定三个测试包，全源码采用 Pyright basic，十二个高价值模块进入
+  strict；任务计划桥已经完成 20 样本性能基线和“不批量化”的决策；
+- 动态主题兼容后的最新 0.1.5 候选通过 603 项 release 测试、Coverage 棘轮和真实
+  `spotlight.theme` 应用，产品完整健康检查为 11/11 正常。
 
 `0.1.5 RC2` 是 1.0 功能基线的资格候选，不是可改名的 `1.0.0` 二进制。后续文档、
 测试结构和质量配置会改变源码身份，因此最终 1.0 必须重新构建和验收。

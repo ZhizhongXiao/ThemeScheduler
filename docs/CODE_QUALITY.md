@@ -208,6 +208,11 @@ p50/p95/max、121 个实际基准输入文件的哈希身份和机器判定。�
 基准统计、输入身份和三条件决策新增 6 项纯单元测试；阶段 E 最终 integration、
 Coverage 棘轮与 release 均运行 597 项测试。
 
+动态主题兼容随后补充标准主题缺 `ThemeId`、无 `[VisualStyles]` 的 `.A/.W` 结构、
+实时外观读取、安装恢复点及事务回滚测试。当前共有 70 个测试模块（unit 25、
+integration 34、release 11），最新 release 报告运行 603 项并通过；Coverage.py 综合
+覆盖率为 78.043%（显示为 78.0%），逐模块棘轮继续通过。
+
 ## 4. 自动验证
 
 ```powershell
