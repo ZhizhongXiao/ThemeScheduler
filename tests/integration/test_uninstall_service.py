@@ -101,6 +101,7 @@ class AppearanceResult:
     windows_verified: bool = True
     system_mode_preserved: bool | None = True
     paused_after: bool | None = True
+    message: str = "appearance result"
 
 
 class FakeProcessGuard:
@@ -339,6 +340,84 @@ class IndependentUninstallServiceTests(unittest.TestCase):
         self.assertTrue(self.layout.program_root.is_dir())
         self.assertIsNotNone(registry.capture())
         self.assertTrue(all(shortcuts.capture(path) for path in self.shortcuts))
+
+    def test_transient_appearance_failure_is_retried_once(self) -> None:
+        self.populate()
+        results = iter(
+            (
+                AppearanceResult(
+                    appearance_applied=None,
+                    windows_verified=False,
+                    message="first verification was transient",
+                ),
+                AppearanceResult(message="retry verified"),
+            )
+        )
+        calls = []
+
+        def restore_appearance() -> AppearanceResult:
+            calls.append(True)
+            return next(results)
+
+        outcome = self.service(
+            self.request(
+                appearance=AppearanceChoice.RESTORE,
+                keep_config=False,
+                keep_logs=False,
+            ),
+            appearance=restore_appearance,
+        ).run()
+
+        self.assertEqual(outcome.result, "completed")
+        self.assertEqual(calls, [True, True])
+        self.assertTrue(outcome.appearance_restored)
+        self.assertFalse(self.layout.data_root.exists())
+
+    def test_persistent_appearance_failure_stops_after_one_retry(self) -> None:
+        self.populate()
+        calls = []
+
+        def restore_appearance() -> AppearanceResult:
+            calls.append(True)
+            return AppearanceResult(
+                appearance_applied=None,
+                windows_verified=False,
+                message=f"attempt {len(calls)} failed",
+            )
+
+        outcome = self.service(
+            self.request(appearance=AppearanceChoice.RESTORE),
+            appearance=restore_appearance,
+        ).run()
+
+        self.assertEqual(outcome.result, "partial")
+        self.assertEqual(calls, [True, True])
+        self.assertIn("First attempt: attempt 1 failed", outcome.message)
+        self.assertIn("Retry: attempt 2 failed", outcome.message)
+        self.assertTrue(self.layout.program_root.exists())
+
+    def test_unsafe_pause_state_is_not_retried(self) -> None:
+        self.populate()
+        calls = []
+
+        def restore_appearance() -> AppearanceResult:
+            calls.append(True)
+            return AppearanceResult(
+                appearance_applied=None,
+                windows_verified=False,
+                paused_after=None,
+                message="pause state is unknown",
+            )
+
+        outcome = self.service(
+            self.request(appearance=AppearanceChoice.RESTORE),
+            appearance=restore_appearance,
+        ).run()
+
+        self.assertEqual(outcome.result, "partial")
+        self.assertEqual(calls, [True])
+        self.assertIn("pause state is unknown", outcome.message)
+        self.assertTrue(self.layout.program_root.exists())
 
     def test_running_process_stops_before_program_deletion(self) -> None:
         self.populate()

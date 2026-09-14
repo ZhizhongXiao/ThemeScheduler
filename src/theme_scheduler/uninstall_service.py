@@ -58,6 +58,9 @@ class AppearanceRestoreOutcome(Protocol):
     @property
     def paused_after(self) -> bool | None: ...
 
+    @property
+    def message(self) -> str: ...
+
 
 class InstalledProcessGuard(Protocol):
     def ensure_idle(self, executable: Path) -> None: ...
@@ -464,14 +467,29 @@ class IndependentUninstallService:
             raise UninstallServiceError(
                 "Appearance restore was requested but is unavailable."
             )
-        outcome = self.appearance_restorer()
-        if not (
+        first = self.appearance_restorer()
+        if self._appearance_restore_verified(first):
+            return
+        if first.paused_after is not True:
+            raise UninstallServiceError(
+                f"Install appearance was not safely restored: {first.message}"
+            )
+        second = self.appearance_restorer()
+        if self._appearance_restore_verified(second):
+            return
+        raise UninstallServiceError(
+            "Install appearance was not safely restored after one retry. "
+            f"First attempt: {first.message} Retry: {second.message}"
+        )
+
+    @staticmethod
+    def _appearance_restore_verified(outcome: AppearanceRestoreOutcome) -> bool:
+        return bool(
             outcome.appearance_applied is True
             and outcome.windows_verified
             and outcome.system_mode_preserved is True
             and outcome.paused_after is True
-        ):
-            raise UninstallServiceError("Install appearance was not safely restored.")
+        )
 
     def _remove_shortcuts(self) -> None:
         for path in self.shortcut_paths:
