@@ -50,6 +50,10 @@ setup_datas = [
         str(entrypoint_root / "theme_manager_bridge.ps1"),
         "entrypoints",
     ),
+    (
+        str(entrypoint_root / "current_appearance_bridge.ps1"),
+        "entrypoints",
+    ),
 ]
 
 analysis = Analysis(

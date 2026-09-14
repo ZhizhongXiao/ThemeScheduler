@@ -116,6 +116,15 @@ class ReleasePayloadTests(unittest.TestCase):
         setup_spec = (
             PROJECT_ROOT / "packaging" / "ThemeSchedulerSetup.spec"
         ).read_text(encoding="utf-8")
+        setup_datas = setup_spec.split("setup_datas = [", 1)[1].split("\n]\n", 1)[0]
+        for resource in (
+            "theme_manager_bridge.ps1",
+            "task_scheduler_bridge.ps1",
+            "current_appearance_bridge.ps1",
+            "shortcut_bridge.ps1",
+        ):
+            with self.subTest(resource=resource):
+                self.assertIn(resource, setup_datas)
         self.assertIn("version_info_setup.txt", setup_spec)
         self.assertIn("ThemeScheduler.ico", setup_spec)
 
