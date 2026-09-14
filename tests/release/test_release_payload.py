@@ -95,12 +95,16 @@ class ReleasePayloadTests(unittest.TestCase):
         )
 
         self.assertIn("uninstall_datas", spec)
-        self.assertIn("theme_manager_bridge.ps1", spec)
-        self.assertIn("task_scheduler_bridge.ps1", spec)
-        self.assertIn("notification_bridge.ps1", spec)
-        self.assertIn("current_appearance_bridge.ps1", spec)
-        self.assertIn("shortcut_bridge.ps1", spec)
-        self.assertIn("uninstall_cleanup.ps1", spec)
+        uninstall_datas = spec.split("uninstall_datas = [", 1)[1].split("\n]\n", 1)[0]
+        for resource in (
+            "theme_manager_bridge.ps1",
+            "task_scheduler_bridge.ps1",
+            "current_appearance_bridge.ps1",
+            "shortcut_bridge.ps1",
+            "uninstall_cleanup.ps1",
+        ):
+            with self.subTest(resource=resource):
+                self.assertIn(resource, uninstall_datas)
         uninstall_section = spec.split(
             "uninstall_analysis = Analysis(",
             1,

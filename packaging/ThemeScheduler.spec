@@ -67,6 +67,10 @@ uninstall_datas = [
         "entrypoints",
     ),
     (
+        str(entrypoint_root / "current_appearance_bridge.ps1"),
+        "entrypoints",
+    ),
+    (
         str(entrypoint_root / "uninstall_cleanup.ps1"),
         "entrypoints",
     ),
