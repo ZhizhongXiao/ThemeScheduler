@@ -19,7 +19,7 @@
 正式安装器位于发布目录：
 
 ```text
-artifacts/releases/0.1.3/dist/ThemeScheduler-Setup.exe
+artifacts/releases/1.0.0/dist/ThemeScheduler-Setup.exe
 ```
 
 正式 SHA-256 以同目录的 `SHA256SUMS.txt` 为准，不从历史说明复制旧版本哈希。
