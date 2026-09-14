@@ -6,11 +6,16 @@ from pathlib import Path
 from uuid import UUID
 
 from tests._accent_theme_support import ScriptedThemeApplyV2Backend
+from tests.fixtures.theme_files import (
+    spotlight_theme_without_id,
+    windows_11_variant_theme,
+)
 from theme_scheduler.accent_theme import (
     LiveThemeApplyError,
     ThemeFileError,
     apply_and_verify_theme_v2,
     build_managed_theme,
+    materialize_theme_visual_state,
     normalize_theme_visual_state,
     read_visual_state,
     resolve_current_theme_path,
@@ -33,6 +38,58 @@ def theme_bytes(color: str = "0XC4FFB900") -> bytes:
 
 
 class ManagedThemeFileTests(unittest.TestCase):
+    def test_materializes_windows_11_variant_without_losing_source_sections(
+        self,
+    ) -> None:
+        source = windows_11_variant_theme()
+        current = read_visual_state(theme_bytes())
+
+        materialized = materialize_theme_visual_state(source, current)
+
+        self.assertTrue(materialized.startswith(source))
+        self.assertEqual(materialized.count(b"[VisualStyles]"), 1)
+        self.assertEqual(materialized.count(b"[MasterThemeSelector]"), 1)
+        self.assertIn(b"[Theme.A]\r\nDisplayName=Custom", materialized)
+        self.assertIn(b"[Theme.W]\r\nDisplayName=Custom", materialized)
+        self.assertEqual(read_visual_state(materialized), current)
+
+    def test_build_accepts_variant_and_system_theme_without_theme_id(self) -> None:
+        current = read_visual_state(theme_bytes())
+        identifier = UUID("11111111-2222-3333-4444-555555555555")
+
+        variant = build_managed_theme(
+            windows_11_variant_theme(),
+            0xC4744DA9,
+            app_mode="Light",
+            theme_id=identifier,
+            current_state=current,
+        )
+        spotlight = build_managed_theme(
+            spotlight_theme_without_id(),
+            0xC4744DA9,
+            app_mode="Dark",
+            theme_id=identifier,
+            current_state=current,
+        )
+
+        expected_id = b"ThemeId={11111111-2222-3333-4444-555555555555}"
+        self.assertIn(expected_id, variant.content)
+        self.assertIn(expected_id, spotlight.content)
+        self.assertEqual(variant.after.app_mode, "Light")
+        self.assertEqual(spotlight.after.app_mode, "Dark")
+        self.assertIn(b"Wallpaper=%SystemRoot%", spotlight.content)
+
+    def test_materialization_preserves_existing_master_selector(self) -> None:
+        source = theme_bytes() + b"\r\n[MasterThemeSelector]\r\nMTSM=DABJDKT\r\n"
+
+        materialized = materialize_theme_visual_state(
+            source,
+            read_visual_state(source),
+        )
+
+        self.assertIn(b"MTSM=DABJDKT", materialized)
+        self.assertNotIn(b"MTSM=RJSPBS", materialized)
+
     def test_build_combines_app_mode_and_color_without_changing_system_mode(
         self,
     ) -> None:

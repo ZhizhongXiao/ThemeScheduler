@@ -126,6 +126,8 @@ class AppearanceRegistrySnapshot:
 
 
 class AppearanceSettingsBackend(Protocol):
+    def read_visual_state(self) -> ThemeVisualState: ...
+
     def capture(self) -> AppearanceRegistrySnapshot: ...
 
     def write_accent_surfaces(
@@ -409,6 +411,18 @@ class WindowsAppearanceSettingsBackend(WindowsAppearanceReader):
         ("start_taskbar_accent", PERSONALIZE_KEY, COLOR_PREVALENCE_VALUE),
         ("title_borders_accent", DWM_KEY, COLOR_PREVALENCE_VALUE),
     )
+
+    def read_visual_state(self) -> ThemeVisualState:
+        """Read the live appearance from authoritative Windows settings."""
+
+        accent = WindowsAccentColorReader().read_color()
+        alpha = (self.read_colorization_color() >> 24) & 0xFF
+        return ThemeVisualState(
+            auto_colorization="1" if self.read_auto_colorization() else "0",
+            colorization_color=(alpha << 24) | accent.value,
+            app_mode=self.read_app_mode().value.title(),
+            system_mode=self.read_system_mode().value.title(),
+        )
 
     def capture(self) -> AppearanceRegistrySnapshot:
         return AppearanceRegistrySnapshot(

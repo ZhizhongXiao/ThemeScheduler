@@ -385,7 +385,11 @@ def capture_install_backup(
             "Current theme does not identify an existing absolute file."
         )
     content = source_path.read_bytes()
-    visual = read_visual_state(content)
+    visual = (
+        settings.read_visual_state()
+        if settings is not None
+        else read_visual_state(content)
+    )
     appearance_registry = settings.capture() if settings is not None else None
     apps = (
         appearance_registry.apps_theme
@@ -450,6 +454,7 @@ def capture_install_backup(
         auto_colorization=visual.auto_colorization == "1",
         app_mode=app_mode,
         system_mode=system_mode,
+        current_state=visual,
     )
     recovery_visual = read_visual_state(recovery_content)
     manifest = InstallBackup(

@@ -10,7 +10,7 @@ import os
 import re
 import subprocess
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -144,7 +144,43 @@ def _read_value(content: bytes, section: str, key: str) -> str:
         raise ThemeFileError(f"Theme [{section}] {key} is not ASCII.") from exc
 
 
-def _replace_value(content: bytes, section: str, key: str, value: str) -> bytes:
+def _section_count(content: bytes, section: str) -> int:
+    header = re.compile(
+        rb"(?im)^\[" + re.escape(section.encode("ascii")) + rb"\][ \t]*\r?$"
+    )
+    return len(list(header.finditer(content)))
+
+
+def _preferred_newline(content: bytes) -> bytes:
+    return b"\r\n" if b"\r\n" in content else b"\n"
+
+
+def _append_section(
+    content: bytes,
+    section: str,
+    values: Mapping[str, str],
+) -> bytes:
+    newline = _preferred_newline(content)
+    prefix = content
+    if prefix and not prefix.endswith((b"\n", b"\r")):
+        prefix += newline
+    if prefix and not prefix.endswith(newline * 2):
+        prefix += newline
+    body = [f"[{section}]".encode("ascii")]
+    body.extend(f"{key}={value}".encode("ascii") for key, value in values.items())
+    return prefix + newline.join(body) + newline
+
+
+def _ensure_section(content: bytes, section: str) -> bytes:
+    count = _section_count(content, section)
+    if count > 1:
+        raise ThemeFileError(
+            f"Theme must contain at most one [{section}] section; found {count}."
+        )
+    return content if count == 1 else _append_section(content, section, {})
+
+
+def _set_or_add_value(content: bytes, section: str, key: str, value: str) -> bytes:
     try:
         encoded = value.encode("ascii")
     except UnicodeEncodeError as exc:
@@ -154,12 +190,86 @@ def _replace_value(content: bytes, section: str, key: str, value: str) -> bytes:
         rb"(?im)^(" + re.escape(key.encode("ascii")) + rb"[ \t]*=[ \t]*)[^\r\n]*"
     )
     matches = list(pattern.finditer(content, start, end))
-    if len(matches) != 1:
+    if len(matches) > 1:
         raise ThemeFileError(
-            f"Theme [{section}] must contain exactly one {key} value; found {len(matches)}."
+            f"Theme [{section}] must contain at most one {key} value; "
+            f"found {len(matches)}."
         )
-    match = matches[0]
-    return content[: match.start()] + match.group(1) + encoded + content[match.end() :]
+    if matches:
+        match = matches[0]
+        return (
+            content[: match.start()] + match.group(1) + encoded + content[match.end() :]
+        )
+    newline = _preferred_newline(content)
+    prefix = content[:end]
+    if prefix and not prefix.endswith((b"\n", b"\r")):
+        prefix += newline
+    return prefix + key.encode("ascii") + b"=" + encoded + newline + content[end:]
+
+
+def _add_value_if_missing(content: bytes, section: str, key: str, value: str) -> bytes:
+    start, end = _section_span(content, section)
+    pattern = re.compile(
+        rb"(?im)^" + re.escape(key.encode("ascii")) + rb"[ \t]*=[ \t]*[^\r\n]*"
+    )
+    matches = list(pattern.finditer(content, start, end))
+    if len(matches) > 1:
+        raise ThemeFileError(
+            f"Theme [{section}] must contain at most one {key} value; "
+            f"found {len(matches)}."
+        )
+    return content if matches else _set_or_add_value(content, section, key, value)
+
+
+def _validate_visual_state(state: ThemeVisualState) -> None:
+    theme_visual_state_from_dict(state.as_dict())
+
+
+def materialize_theme_visual_state(
+    source: bytes,
+    current_state: ThemeVisualState,
+) -> bytes:
+    """Return an applyable theme copy while preserving every source byte possible."""
+
+    _validate_visual_state(current_state)
+    count = _section_count(source, "VisualStyles")
+    if count > 1:
+        raise ThemeFileError(
+            f"Theme must contain at most one [VisualStyles] section; found {count}."
+        )
+    content = source
+    if count == 0:
+        content = _append_section(
+            content,
+            "VisualStyles",
+            {
+                "Path": r"%ResourceDir%\Themes\Aero\Aero.msstyles",
+                "ColorStyle": "NormalColor",
+                "Size": "NormalSize",
+                "AutoColorization": current_state.auto_colorization,
+                "ColorizationColor": f"0X{current_state.colorization_color:08X}",
+                "SystemMode": current_state.system_mode,
+                "AppMode": current_state.app_mode,
+                "VisualStyleVersion": "10",
+            },
+        )
+    else:
+        for key, value in (
+            ("AutoColorization", current_state.auto_colorization),
+            ("ColorizationColor", f"0X{current_state.colorization_color:08X}"),
+            ("SystemMode", current_state.system_mode),
+            ("AppMode", current_state.app_mode),
+        ):
+            content = _set_or_add_value(content, "VisualStyles", key, value)
+
+    content = _ensure_section(content, "MasterThemeSelector")
+    content = _add_value_if_missing(
+        content,
+        "MasterThemeSelector",
+        "MTSM",
+        "RJSPBS",
+    )
+    return content
 
 
 def read_visual_state(content: bytes) -> ThemeVisualState:
@@ -186,6 +296,7 @@ def normalize_theme_visual_state(
     auto_colorization: bool,
     app_mode: str,
     system_mode: str | None = None,
+    current_state: ThemeVisualState | None = None,
 ) -> bytes:
     """Create a semantic recovery copy without changing theme identity."""
 
@@ -201,32 +312,32 @@ def normalize_theme_visual_state(
         raise ThemeFileError("AppMode must be Light or Dark.")
     if system_mode not in {None, "Light", "Dark"}:
         raise ThemeFileError("SystemMode must be Light, Dark, or omitted.")
-    before = read_visual_state(source)
-    content = _replace_value(
-        source,
+    before = current_state or read_visual_state(source)
+    content = materialize_theme_visual_state(source, before)
+    content = _set_or_add_value(
+        content,
         "VisualStyles",
         "AutoColorization",
         "1" if auto_colorization else "0",
     )
-    content = _replace_value(
+    content = _set_or_add_value(
         content,
         "VisualStyles",
         "ColorizationColor",
         f"0X{colorization_color:08X}",
     )
-    content = _replace_value(
+    content = _set_or_add_value(
         content,
         "VisualStyles",
         "AppMode",
         app_mode,
     )
-    if system_mode is not None:
-        content = _replace_value(
-            content,
-            "VisualStyles",
-            "SystemMode",
-            system_mode,
-        )
+    content = _set_or_add_value(
+        content,
+        "VisualStyles",
+        "SystemMode",
+        system_mode or before.system_mode,
+    )
     after = read_visual_state(content)
     expected_system_mode = system_mode or before.system_mode
     if (
@@ -250,6 +361,7 @@ def build_managed_theme(
     system_mode: str | None = None,
     theme_id: UUID | None = None,
     display_name: str = "ThemeScheduler Accent Prototype",
+    current_state: ThemeVisualState | None = None,
 ) -> ManagedTheme:
     if (
         isinstance(colorization_color, bool)
@@ -262,28 +374,38 @@ def build_managed_theme(
         raise ThemeFileError("AppMode must be Light, Dark, or omitted.")
     if system_mode not in {None, "Light", "Dark"}:
         raise ThemeFileError("SystemMode must be Light, Dark, or omitted.")
-    before = read_visual_state(source)
+    before = current_state or read_visual_state(source)
+    content = materialize_theme_visual_state(source, before)
     identifier = theme_id or uuid4()
-    content = _replace_value(source, "Theme", "DisplayName", display_name)
-    content = _replace_value(
+    content = _ensure_section(content, "Theme")
+    content = _set_or_add_value(content, "Theme", "DisplayName", display_name)
+    content = _set_or_add_value(
         content, "Theme", "ThemeId", "{" + str(identifier).upper() + "}"
     )
-    content = _replace_value(
+    content = _set_or_add_value(
         content,
         "VisualStyles",
         "AutoColorization",
         "1" if auto_colorization else "0",
     )
-    content = _replace_value(
+    content = _set_or_add_value(
         content,
         "VisualStyles",
         "ColorizationColor",
         f"0X{colorization_color:08X}",
     )
-    if app_mode is not None:
-        content = _replace_value(content, "VisualStyles", "AppMode", app_mode)
-    if system_mode is not None:
-        content = _replace_value(content, "VisualStyles", "SystemMode", system_mode)
+    content = _set_or_add_value(
+        content,
+        "VisualStyles",
+        "AppMode",
+        app_mode or before.app_mode,
+    )
+    content = _set_or_add_value(
+        content,
+        "VisualStyles",
+        "SystemMode",
+        system_mode or before.system_mode,
+    )
     after = read_visual_state(content)
     expected_app_mode = app_mode or before.app_mode
     expected_system_mode = system_mode or before.system_mode
@@ -492,9 +614,15 @@ def _settle(seconds: float) -> None:
 
 def _read_active_visual_state(
     backend: ThemeApplyV2Backend,
+    visual_state_reader: Callable[[], ThemeVisualState] | None = None,
 ) -> tuple[Path, ThemeVisualState]:
     active_path = backend.current_theme_path()
-    return active_path, read_visual_state(active_path.read_bytes())
+    actual = (
+        visual_state_reader()
+        if visual_state_reader is not None
+        else read_visual_state(active_path.read_bytes())
+    )
+    return active_path, actual
 
 
 def _visual_state_failures(
@@ -544,12 +672,13 @@ def _try_restore_original_index(
     index_before: int,
     before: ThemeVisualState,
     settle_seconds: float,
+    visual_state_reader: Callable[[], ThemeVisualState] | None,
 ) -> bool:
     try:
         if backend.set_v2_index(index_before) != index_before:
             return False
         _settle(settle_seconds)
-        _, actual = _read_active_visual_state(backend)
+        _, actual = _read_active_visual_state(backend, visual_state_reader)
         return not _visual_state_failures(
             actual,
             before,
@@ -564,11 +693,12 @@ def _try_restore_theme_backup(
     *,
     before: ThemeVisualState,
     settle_seconds: float,
+    visual_state_reader: Callable[[], ThemeVisualState] | None,
 ) -> bool:
     try:
         backend.apply_theme_v2(rollback_path)
         _settle(settle_seconds)
-        _, actual = _read_active_visual_state(backend)
+        _, actual = _read_active_visual_state(backend, visual_state_reader)
         return not _visual_state_failures(
             actual,
             before,
@@ -584,12 +714,14 @@ def _rollback_theme_v2(
     before: ThemeVisualState,
     rollback_path: Path | None,
     settle_seconds: float,
+    visual_state_reader: Callable[[], ThemeVisualState] | None,
 ) -> bool:
     if _try_restore_original_index(
         backend,
         index_before=index_before,
         before=before,
         settle_seconds=settle_seconds,
+        visual_state_reader=visual_state_reader,
     ):
         return True
     return rollback_path is not None and _try_restore_theme_backup(
@@ -597,6 +729,7 @@ def _rollback_theme_v2(
         rollback_path,
         before=before,
         settle_seconds=settle_seconds,
+        visual_state_reader=visual_state_reader,
     )
 
 
@@ -608,6 +741,7 @@ def apply_and_verify_theme_v2(
     rollback_path: Path | None = None,
     backend: ThemeApplyV2Backend | None = None,
     settle_seconds: float = 2.0,
+    visual_state_reader: Callable[[], ThemeVisualState] | None = None,
 ) -> ThemeApplyV2Result:
     backend = backend or WindowsThemeApplyBackend()
     before_index = backend.current_v2_index()
@@ -624,7 +758,7 @@ def apply_and_verify_theme_v2(
             current_index=current_index,
             custom_index=custom_index,
         )
-        active_path, actual = _read_active_visual_state(backend)
+        active_path, actual = _read_active_visual_state(backend, visual_state_reader)
         failures = _visual_state_failures(
             actual,
             expected,
@@ -645,6 +779,7 @@ def apply_and_verify_theme_v2(
             before=before,
             rollback_path=rollback_path,
             settle_seconds=settle_seconds,
+            visual_state_reader=visual_state_reader,
         )
         raise LiveThemeApplyError(
             f"Managed theme V2 apply failed: {exc}",

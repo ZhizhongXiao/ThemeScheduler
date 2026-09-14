@@ -19,7 +19,7 @@ from ..accent_theme import (
     ThemeApplyV2Backend,
     ThemeVisualState,
     WindowsThemeApplyBackend,
-    read_visual_state,
+    materialize_theme_visual_state,
 )
 from ..appearance import (
     AppearanceSettingsBackend,
@@ -83,12 +83,16 @@ class WindowsAutoBackend:
             profile,
             self.windows_build,
             backend=self.theme_backend,
+            visual_state_reader=self.appearance_backend.read_visual_state,
             timestamp=timestamp,
         )
 
     def probe(self) -> None:
         active = self.theme_backend.current_theme_path()
-        read_visual_state(active.read_bytes())
+        materialize_theme_visual_state(
+            active.read_bytes(),
+            self.appearance_backend.read_visual_state(),
+        )
         current, custom = self.theme_backend.current_v2_indices()
         if not all(_is_valid_theme_index(value) for value in (current, custom)):
             raise OSError("IThemeManager2 capability probe returned invalid indices.")
@@ -116,8 +120,7 @@ class WindowsAutoBackend:
         )
 
     def read_visual_state(self) -> ThemeVisualState:
-        path = self.theme_backend.current_theme_path()
-        return read_visual_state(path.read_bytes())
+        return self.appearance_backend.read_visual_state()
 
     def verify_transaction_target(
         self,
@@ -156,6 +159,7 @@ class WindowsAutoBackend:
             backend=self.theme_backend,
             appearance_backend=self.appearance_backend,
             settle_seconds=self.settle_seconds,
+            visual_state_reader=self.appearance_backend.read_visual_state,
         )
 
 

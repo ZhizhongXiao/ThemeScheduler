@@ -8,6 +8,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 from tests.fixtures.appearance_settings import ScriptedAppearanceSettings
+from tests.fixtures.theme_files import windows_11_variant_theme
 from theme_scheduler.accent_profile import (
     AccentProfile,
     RgbColor,
@@ -18,7 +19,11 @@ from theme_scheduler.accent_service import (
     apply_install_backup_appearance,
     rollback_accent_transaction,
 )
-from theme_scheduler.accent_theme import LiveThemeApplyError
+from theme_scheduler.accent_theme import (
+    LiveThemeApplyError,
+    ThemeVisualState,
+    read_visual_state,
+)
 from theme_scheduler.appearance import ThemeMode
 from theme_scheduler.backup import InstallBackup
 from theme_scheduler.storage import UserDataLayout
@@ -182,6 +187,61 @@ class ExplorerRecoveryScriptTests(unittest.TestCase):
 
 
 class AccentServiceTests(unittest.TestCase):
+    def test_variant_theme_uses_raw_evidence_and_applyable_rollback_copy(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = windows_11_variant_theme()
+            active = root / "Custom.theme"
+            active.write_bytes(source)
+            layout = UserDataLayout(root / "data")
+            backend = DynamicThemeBackend(active)
+            before = ThemeVisualState("0", 0xC40078D4, "Light", "Dark")
+            settings = ScriptedAppearanceSettings(
+                backend,
+                fallback_visual=before,
+            )
+            profile = AccentProfile(
+                "night",
+                "2026-09-14T23:45:00+08:00",
+                False,
+                0xC4744DA9,
+                "26200",
+            )
+
+            result = apply_accent_profile(
+                profile,
+                layout,
+                apps_theme=ThemeMode.DARK,
+                system_theme=ThemeMode.DARK,
+                start_taskbar_accent=True,
+                title_borders_accent=True,
+                backend=backend,
+                appearance_backend=settings,
+                settle_seconds=0,
+            )
+
+            transaction = result.transaction_directory
+            self.assertEqual((transaction / "before.theme").read_bytes(), source)
+            self.assertEqual(
+                read_visual_state((transaction / "rollback.theme").read_bytes()),
+                before,
+            )
+            self.assertIn(
+                b"[Theme.W]\r\nDisplayName=Custom",
+                (transaction / "managed.theme").read_bytes(),
+            )
+            self.assertTrue(
+                rollback_accent_transaction(
+                    transaction,
+                    backend=backend,
+                    appearance_backend=settings,
+                    settle_seconds=0,
+                )
+            )
+            self.assertEqual(backend.current_theme_path(), active)
+
     def test_apply_sets_complete_scheduled_appearance(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TypeGuard
@@ -12,11 +12,15 @@ from .accent_profile import AccentProfile, profile_from_theme
 from .accent_theme import (
     LiveThemeApplyError,
     ThemeApplyV2Backend,
+    ThemeVisualState,
     WindowsThemeApplyBackend,
     apply_and_verify_theme_v2,
     build_managed_theme,
+    materialize_theme_visual_state,
+    normalize_theme_visual_state,
     read_visual_state,
     sha256_bytes,
+    theme_visual_state_from_dict,
     write_new_bytes,
 )
 from .appearance import (
@@ -105,12 +109,16 @@ def capture_live_profile(
     windows_build: str,
     *,
     backend: ThemeApplyV2Backend | None = None,
+    visual_state_reader: Callable[[], ThemeVisualState] | None = None,
     timestamp: str | None = None,
 ) -> AccentProfile:
     theme_backend = backend or WindowsThemeApplyBackend()
     active = theme_backend.current_theme_path()
+    content = active.read_bytes()
+    if visual_state_reader is not None:
+        content = materialize_theme_visual_state(content, visual_state_reader())
     return profile_from_theme(
-        active.read_bytes(),
+        content,
         profile=profile,
         captured_at=timestamp or captured_at(),
         windows_build=windows_build,
@@ -151,9 +159,10 @@ def apply_accent_profile(
             )
         transaction = resolved
     before_path = transaction / "before.theme"
+    rollback_path = transaction / "rollback.theme"
     managed_path = transaction / "managed.theme"
     journal_path = transaction / "journal.json"
-    for output in (before_path, managed_path, journal_path):
+    for output in (before_path, rollback_path, managed_path, journal_path):
         if output.exists():
             raise FileExistsError(
                 f"Refusing to overwrite existing transaction file: {output}"
@@ -166,12 +175,18 @@ def apply_accent_profile(
         start_taskbar_accent,
         title_borders_accent,
     )
-    settings = (
-        appearance_backend or WindowsAppearanceSettingsBackend()
-        if any(value is not None for value in appearance_targets)
-        else None
-    )
+    settings = appearance_backend
+    if settings is None and (
+        any(value is not None for value in appearance_targets) or backend is None
+    ):
+        settings = WindowsAppearanceSettingsBackend()
     settings_before = settings.capture() if settings is not None else None
+    visual_state_reader = settings.read_visual_state if settings is not None else None
+    current_state = (
+        visual_state_reader()
+        if visual_state_reader is not None
+        else read_visual_state(active_before_content)
+    )
     managed = build_managed_theme(
         active_before_content,
         profile.colorization_color,
@@ -179,8 +194,18 @@ def apply_accent_profile(
         app_mode=apps_theme.value.title() if apps_theme is not None else None,
         system_mode=system_theme.value.title() if system_theme is not None else None,
         display_name=f"ThemeScheduler {profile.profile.title()} Accent",
+        current_state=current_state,
+    )
+    rollback_content = normalize_theme_visual_state(
+        active_before_content,
+        current_state.colorization_color,
+        auto_colorization=current_state.auto_colorization == "1",
+        app_mode=current_state.app_mode,
+        system_mode=current_state.system_mode,
+        current_state=current_state,
     )
     write_new_bytes(before_path, active_before_content)
+    write_new_bytes(rollback_path, rollback_content)
     write_new_bytes(managed_path, managed.content)
 
     journal: dict[str, Any] = {
@@ -193,6 +218,8 @@ def apply_accent_profile(
             "sourcePath": str(active_before_path),
             "beforeTheme": str(before_path.resolve()),
             "beforeSha256": sha256_bytes(active_before_content),
+            "rollbackTheme": str(rollback_path.resolve()),
+            "rollbackSha256": sha256_bytes(rollback_content),
             "managedTheme": str(managed_path.resolve()),
             "managedSha256": sha256_bytes(managed.content),
         },
@@ -219,9 +246,10 @@ def apply_accent_profile(
             managed_path,
             managed.after,
             managed.before,
-            rollback_path=before_path,
+            rollback_path=rollback_path,
             backend=theme_backend,
             settle_seconds=settle_seconds,
+            visual_state_reader=visual_state_reader,
         )
         journal.update(
             {
@@ -270,6 +298,7 @@ def apply_accent_profile(
             backend=theme_backend,
             appearance_backend=settings,
             settle_seconds=settle_seconds,
+            visual_state_reader=visual_state_reader,
         )
         journal.update(
             {
@@ -378,27 +407,56 @@ def rollback_accent_transaction(
     backend: ThemeApplyV2Backend | None = None,
     appearance_backend: AppearanceSettingsBackend | None = None,
     settle_seconds: float = 2.0,
+    visual_state_reader: Callable[[], ThemeVisualState] | None = None,
 ) -> bool:
     """Restore the complete before.theme after a later core-stage failure."""
+
+    if visual_state_reader is None and appearance_backend is not None:
+        visual_state_reader = appearance_backend.read_visual_state
 
     transaction = Path(transaction_directory)
     before_path = transaction / "before.theme"
     journal_path = transaction / "journal.json"
-    before_content = before_path.read_bytes()
-    expected = read_visual_state(before_content)
     journal = load_json_object(journal_path)
     if journal.get("kind") != "themescheduler.accent-transaction":
         raise ValueError("Rollback journal is not an accent transaction.")
     files = journal.get("files")
     if not _is_string_mapping(files):
         raise ValueError("Rollback journal has no file binding.")
+    before_payload = journal.get("before")
+    if not _is_string_mapping(before_payload):
+        raise ValueError("Rollback journal has no visual-state binding.")
+    expected = theme_visual_state_from_dict(before_payload)
+    before_content = before_path.read_bytes()
     if files.get("beforeSha256") != sha256_bytes(before_content):
         raise ValueError("Rollback before.theme hash does not match its journal.")
+
+    recovery_path = before_path
+    recovery_name = files.get("rollbackTheme")
+    recovery_hash = files.get("rollbackSha256")
+    has_recovery_name = isinstance(recovery_name, str)
+    has_recovery_hash = isinstance(recovery_hash, str)
+    if has_recovery_name != has_recovery_hash:
+        raise ValueError("Rollback theme binding is incomplete.")
+    if has_recovery_name and has_recovery_hash:
+        assert isinstance(recovery_name, str)
+        assert isinstance(recovery_hash, str)
+        candidate = Path(recovery_name)
+        if candidate.parent.resolve() != transaction.resolve():
+            raise ValueError("Rollback theme escapes its accent transaction.")
+        recovery_content = candidate.read_bytes()
+        if sha256_bytes(recovery_content) != recovery_hash:
+            raise ValueError("Rollback theme hash does not match its journal.")
+        recovery_path = candidate
 
     theme_backend = backend or WindowsThemeApplyBackend()
     theme_restored = False
     try:
-        actual = read_visual_state(theme_backend.current_theme_path().read_bytes())
+        actual = (
+            visual_state_reader()
+            if visual_state_reader is not None
+            else read_visual_state(theme_backend.current_theme_path().read_bytes())
+        )
         theme_restored = actual == expected
     except Exception:
         theme_restored = False
@@ -410,8 +468,12 @@ def rollback_accent_transaction(
                 theme_backend.set_v2_index(before_index)
                 if settle_seconds:
                     time.sleep(settle_seconds)
-                actual = read_visual_state(
-                    theme_backend.current_theme_path().read_bytes()
+                actual = (
+                    visual_state_reader()
+                    if visual_state_reader is not None
+                    else read_visual_state(
+                        theme_backend.current_theme_path().read_bytes()
+                    )
                 )
                 if actual == expected:
                     theme_restored = True
@@ -419,10 +481,14 @@ def rollback_accent_transaction(
                 pass
     if not theme_restored:
         try:
-            theme_backend.apply_theme_v2(before_path)
+            theme_backend.apply_theme_v2(recovery_path)
             if settle_seconds:
                 time.sleep(settle_seconds)
-            actual = read_visual_state(theme_backend.current_theme_path().read_bytes())
+            actual = (
+                visual_state_reader()
+                if visual_state_reader is not None
+                else read_visual_state(theme_backend.current_theme_path().read_bytes())
+            )
             theme_restored = actual == expected
         except Exception:
             theme_restored = False

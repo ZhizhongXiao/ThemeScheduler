@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from tests.fixtures.theme_files import windows_11_variant_theme
 from theme_scheduler.accent_profile import AccentProfile
 from theme_scheduler.accent_theme import ThemeVisualState
 from theme_scheduler.appearance import AppearanceRegistrySnapshot, ThemeMode
@@ -36,6 +37,9 @@ class _ThemeBackend:
 class _AppearanceBackend:
     def __init__(self) -> None:
         self.verify_calls: list[dict[str, object]] = []
+
+    def read_visual_state(self) -> ThemeVisualState:
+        return ThemeVisualState("0", 0xC4744DA9, "Light", "Dark")
 
     def capture(self) -> AppearanceRegistrySnapshot:
         raise AssertionError("capture is not used by these adapter tests")
@@ -120,6 +124,16 @@ class WindowsAutoBackendTests(unittest.TestCase):
                     "title_borders": True,
                 }
             ],
+        )
+
+    def test_probe_accepts_windows_11_variant_using_live_settings(self) -> None:
+        self.active.write_bytes(windows_11_variant_theme())
+
+        self.backend.probe()
+
+        self.assertEqual(
+            self.backend.read_visual_state(),
+            ThemeVisualState("0", 0xC4744DA9, "Light", "Dark"),
         )
 
     def test_transaction_verification_handles_legacy_and_invalid_targets(self) -> None:

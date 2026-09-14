@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from theme_scheduler.accent_theme import read_visual_state
+from theme_scheduler.accent_theme import (
+    ThemeFileError,
+    ThemeVisualState,
+    read_visual_state,
+)
 from theme_scheduler.appearance import (
     AppearanceRegistrySnapshot,
     RegistryValue,
@@ -20,6 +24,7 @@ class ScriptedAppearanceSettings:
         fail_verify: bool = False,
         fail_write_after_start: bool = False,
         fail_restore: bool = False,
+        fallback_visual: ThemeVisualState | None = None,
     ) -> None:
         self.theme_backend = theme_backend
         self.start_taskbar = start_taskbar
@@ -27,12 +32,21 @@ class ScriptedAppearanceSettings:
         self.fail_verify = fail_verify
         self.fail_write_after_start = fail_write_after_start
         self.fail_restore = fail_restore
+        self.fallback_visual = fallback_visual
         self.write_calls = 0
         self.restore_calls = 0
 
     def _visual(self):
         path = self.theme_backend.current_theme_path()  # type: ignore[attr-defined]
-        return read_visual_state(path.read_bytes())
+        try:
+            return read_visual_state(path.read_bytes())
+        except ThemeFileError:
+            if self.fallback_visual is None:
+                raise
+            return self.fallback_visual
+
+    def read_visual_state(self):
+        return self._visual()
 
     def capture(self) -> AppearanceRegistrySnapshot:
         visual = self._visual()

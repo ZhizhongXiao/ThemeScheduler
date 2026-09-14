@@ -9,11 +9,12 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
+from tests.fixtures.theme_files import windows_11_variant_theme
 from theme_scheduler.accent_profile import (
     AccentProfile,
     AccentProfileStore,
 )
-from theme_scheduler.accent_theme import read_visual_state
+from theme_scheduler.accent_theme import ThemeVisualState, read_visual_state
 from theme_scheduler.appearance import AppearanceRegistrySnapshot, RegistryValue
 from theme_scheduler.backup import (
     InstallBackup,
@@ -484,6 +485,9 @@ class InstallBackupContractTests(unittest.TestCase):
         )
 
         class AppearanceBackend:
+            def read_visual_state(self) -> ThemeVisualState:
+                return ThemeVisualState("0", 0xC4744DA9, "Dark", "Dark")
+
             def capture(self) -> AppearanceRegistrySnapshot:
                 return snapshot
 
@@ -510,6 +514,55 @@ class InstallBackupContractTests(unittest.TestCase):
             self.assertFalse(captured.apps_value_exists)
             self.assertEqual(captured.system_mode, "Dark")
             self.assertEqual(captured.as_dict()["schemaVersion"], 2)
+            self.assertEqual(store.load_verified(), captured)
+
+    def test_live_capture_materializes_windows_11_variant_for_recovery(self) -> None:
+        class ThemeBackend:
+            def __init__(self, path: Path) -> None:
+                self.path = path
+
+            def current_theme_path(self) -> Path:
+                return self.path
+
+        snapshot = AppearanceRegistrySnapshot(
+            apps_theme=RegistryValue(True, 1, 4),
+            system_theme=RegistryValue(True, 0, 4),
+            start_taskbar_accent=RegistryValue(True, 1, 4),
+            title_borders_accent=RegistryValue(True, 1, 4),
+        )
+        visual = ThemeVisualState("0", 0xC4744DA9, "Light", "Dark")
+
+        class AppearanceBackend:
+            def read_visual_state(self) -> ThemeVisualState:
+                return visual
+
+            def capture(self) -> AppearanceRegistrySnapshot:
+                return snapshot
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "Custom.theme"
+            source_bytes = windows_11_variant_theme()
+            source.write_bytes(source_bytes)
+            store = InstallBackupStore(
+                root / "backup" / "install.json",
+                root / "backup" / "install.theme",
+            )
+
+            captured = capture_install_backup(
+                store,
+                created_by_version="1.0.0",
+                windows_build="26200",
+                theme_backend=ThemeBackend(source),  # type: ignore[arg-type]
+                appearance_backend=AppearanceBackend(),  # type: ignore[arg-type]
+                colorization_reader=lambda: visual.colorization_color,
+                timestamp="2026-09-14T12:00:00+08:00",
+            )
+
+            self.assertEqual(source.read_bytes(), source_bytes)
+            recovery = store.theme_path.read_bytes()
+            self.assertIn(b"[Theme.A]\r\nDisplayName=Custom", recovery)
+            self.assertEqual(read_visual_state(recovery), visual)
             self.assertEqual(store.load_verified(), captured)
 
     def test_live_capture_rejects_colorization_change_without_committing(
