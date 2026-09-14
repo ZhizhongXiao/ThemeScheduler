@@ -6,7 +6,7 @@ import os
 import sys
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, TypeGuard
 
 from ..accent_profile import AccentProfile
 from ..accent_service import (
@@ -90,10 +90,7 @@ class WindowsAutoBackend:
         active = self.theme_backend.current_theme_path()
         read_visual_state(active.read_bytes())
         current, custom = self.theme_backend.current_v2_indices()
-        if any(
-            isinstance(value, bool) or not isinstance(value, int) or value < 0
-            for value in (current, custom)
-        ):
+        if not all(_is_valid_theme_index(value) for value in (current, custom)):
             raise OSError("IThemeManager2 capability probe returned invalid indices.")
 
     def apply_profile(
@@ -134,9 +131,7 @@ class WindowsAutoBackend:
         settings_target = journal.get("settingsTarget")
         if settings_target is None:
             return tuple(failures)
-        if not isinstance(settings_target, Mapping) or not all(
-            isinstance(key, str) for key in settings_target
-        ):
+        if not _is_string_mapping(settings_target):
             return (*failures, "Appearance settingsTarget is malformed.")
         try:
             apps_theme = _optional_theme_mode(settings_target.get("appsTheme"))
@@ -170,6 +165,18 @@ def _optional_theme_mode(value: object) -> ThemeMode | None:
     if not isinstance(value, str):
         raise TypeError("theme mode must be a string or null")
     return ThemeMode(value)
+
+
+def _is_valid_theme_index(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _is_object_mapping(value: object) -> TypeGuard[Mapping[object, object]]:
+    return isinstance(value, Mapping)
+
+
+def _is_string_mapping(value: object) -> TypeGuard[Mapping[str, object]]:
+    return _is_object_mapping(value) and all(isinstance(key, str) for key in value)
 
 
 def _optional_bool(value: object) -> bool | None:

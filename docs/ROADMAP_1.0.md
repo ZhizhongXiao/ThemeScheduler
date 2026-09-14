@@ -12,7 +12,7 @@
 - `0.1.5 RC2` 已通过 577 项 release 测试、Coverage 棘轮、连续双构建、PE/payload
   校验、Defender 扫描和完整外观人工实机矩阵；
 - 67 个 `test_*.py` 已按 `unit/integration/release` 归类，发现规则显式限定三个
-  测试包；全源码采用 Pyright basic，七个高价值模块进入 strict；任务计划桥尚无
+  测试包；全源码采用 Pyright basic，十二个高价值模块进入 strict；任务计划桥尚无
   性能基线。
 
 `0.1.5 RC2` 是 1.0 功能基线的资格候选，不是可改名的 `1.0.0` 二进制。后续文档、
@@ -99,7 +99,7 @@ integration、coverage、Coverage 棘轮和 release 的最终结果见本阶段�
 无效 JSON/超时和完整 XML 恢复。测试发现了“显示位置第二次写入失败时仍重复应用
 未改变的主题”缺陷；回滚现先验证当前视觉状态，已经等于原目标时只恢复注册表快照。
 
-## 6. 阶段 D：扩大 Pyright strict 棘轮
+## 6. 阶段 D：扩大 Pyright strict 棘轮（已完成）
 
 保持完整 `src/theme_scheduler` 的 basic 零诊断，以单文件为单位处理下一批边界：
 
@@ -116,6 +116,11 @@ TypedDict、窄化助手或更准确的返回类型修复问题；不得批量 `
 
 退出条件：至少完成上述高风险边界的可行子集；无法合理收紧的文件记录具体诊断和
 阻塞原因，不因追求全量 strict 阻止 1.0。
+
+执行结果：五个候选全部进入 strict，全源码仍为零诊断。`maintenance_service.py` 与
+`scheduled_auto.py` 无需源码调整；另外三个模块以具名运行时窄化助手和显式容器类型
+消除 Unknown/不必要类型判断，同时保留面向反序列化、插件后端和 Python 调用方的
+防御性校验。未使用批量 `Any`、`cast`、忽略注释或降低规则。
 
 ## 7. 阶段 E：任务桥性能测量与决策
 

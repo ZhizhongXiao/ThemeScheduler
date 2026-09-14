@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeGuard
 
 from .accent_profile import AccentProfile, profile_from_theme
 from .accent_theme import (
@@ -27,6 +28,20 @@ from .appearance import (
 from .backup import InstallBackup
 from .persistence import atomic_write_json, captured_at, load_json_object
 from .storage import UserDataLayout
+
+
+def _require_install_backup(value: object) -> InstallBackup:
+    if not isinstance(value, InstallBackup):
+        raise TypeError("Install appearance target must be InstallBackup.")
+    return value
+
+
+def _is_object_mapping(value: object) -> TypeGuard[Mapping[object, object]]:
+    return isinstance(value, Mapping)
+
+
+def _is_string_mapping(value: object) -> TypeGuard[Mapping[str, object]]:
+    return _is_object_mapping(value) and all(isinstance(key, str) for key in value)
 
 
 @dataclass(frozen=True)
@@ -307,8 +322,7 @@ def apply_install_backup_appearance(
 ) -> AccentApplyOutcome:
     """Restore the complete install-time appearance when the backup supports it."""
 
-    if not isinstance(backup, InstallBackup):
-        raise TypeError("Install appearance target must be InstallBackup.")
+    backup = _require_install_backup(backup)
     target = _InstallAppearanceIntent(
         profile="install-backup",
         captured_at=backup.captured_at,
@@ -376,7 +390,7 @@ def rollback_accent_transaction(
     if journal.get("kind") != "themescheduler.accent-transaction":
         raise ValueError("Rollback journal is not an accent transaction.")
     files = journal.get("files")
-    if not isinstance(files, dict):
+    if not _is_string_mapping(files):
         raise ValueError("Rollback journal has no file binding.")
     if files.get("beforeSha256") != sha256_bytes(before_content):
         raise ValueError("Rollback before.theme hash does not match its journal.")
@@ -389,7 +403,7 @@ def rollback_accent_transaction(
     except Exception:
         theme_restored = False
     manager = journal.get("themeManager")
-    if not theme_restored and isinstance(manager, dict):
+    if not theme_restored and _is_string_mapping(manager):
         before_index = manager.get("indexBefore")
         if isinstance(before_index, int) and not isinstance(before_index, bool):
             try:
@@ -417,7 +431,7 @@ def rollback_accent_transaction(
     settings_payload = journal.get("settingsBefore")
     if settings_payload is not None:
         try:
-            if not isinstance(settings_payload, dict):
+            if not _is_string_mapping(settings_payload):
                 raise TypeError("Appearance rollback snapshot is invalid.")
             snapshot = AppearanceRegistrySnapshot.from_dict(settings_payload)
             settings = appearance_backend or WindowsAppearanceSettingsBackend()

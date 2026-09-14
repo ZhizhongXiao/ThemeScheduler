@@ -129,6 +129,11 @@ class QualityContractTests(unittest.TestCase):
                 "src/theme_scheduler/automation/contracts.py",
                 "src/theme_scheduler/automation/outcome.py",
                 "src/theme_scheduler/accent_theme.py",
+                "src/theme_scheduler/configuration_service.py",
+                "src/theme_scheduler/maintenance_service.py",
+                "src/theme_scheduler/automation/backend.py",
+                "src/theme_scheduler/scheduled_auto.py",
+                "src/theme_scheduler/accent_service.py",
             ],
         )
 

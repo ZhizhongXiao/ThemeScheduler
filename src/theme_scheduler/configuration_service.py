@@ -6,7 +6,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, TypeGuard
 
 from .accent_profile import (
     AccentProfile,
@@ -25,6 +25,32 @@ from .scheduler import (
 )
 from .storage import UserDataLayout
 from .switch_override import PendingSwitch, PendingSwitchStore
+
+PROFILE_NAMES = ("day", "night")
+
+
+def _require_app_config(value: object) -> AppConfig:
+    if not isinstance(value, AppConfig):
+        raise TypeError("Configuration target must be AppConfig.")
+    return value
+
+
+def _is_object_mapping(value: object) -> TypeGuard[Mapping[object, object]]:
+    return isinstance(value, Mapping)
+
+
+def _require_profile_colors(value: object) -> dict[str, RgbColor]:
+    if not _is_object_mapping(value):
+        raise TypeError("Profile colors must be a mapping.")
+    if set(value) != set(PROFILE_NAMES):
+        raise ValueError("Profile colors must contain exactly day and night.")
+    colors: dict[str, RgbColor] = {}
+    for name in PROFILE_NAMES:
+        color = value[name]
+        if not isinstance(color, RgbColor):
+            raise TypeError("Profile colors must be RgbColor values.")
+        colors[name] = color
+    return colors
 
 
 class ConfigurationResultKind(str, Enum):
@@ -141,8 +167,7 @@ class ConfigurationService:
         return instant.isoformat(timespec="seconds")
 
     def update(self, target: AppConfig) -> ConfigurationOutcome:
-        if not isinstance(target, AppConfig):
-            raise TypeError("Configuration target must be AppConfig.")
+        target = _require_app_config(target)
         return self._run_locked(lambda: self._update_locked(target))
 
     def update_bundle(
@@ -150,15 +175,8 @@ class ConfigurationService:
         target: AppConfig,
         profile_colors: Mapping[str, RgbColor],
     ) -> ConfigurationOutcome:
-        if not isinstance(target, AppConfig):
-            raise TypeError("Configuration target must be AppConfig.")
-        if not isinstance(profile_colors, Mapping):
-            raise TypeError("Profile colors must be a mapping.")
-        if set(profile_colors) != {"day", "night"}:
-            raise ValueError("Profile colors must contain exactly day and night.")
-        colors = dict(profile_colors)
-        if not all(isinstance(color, RgbColor) for color in colors.values()):
-            raise TypeError("Profile colors must be RgbColor values.")
+        target = _require_app_config(target)
+        colors = _require_profile_colors(profile_colors)
         return self._run_locked(lambda: self._update_bundle_locked(target, colors))
 
     def _run_locked(
@@ -228,12 +246,12 @@ class ConfigurationService:
     ) -> ConfigurationOutcome:
         try:
             ensure_no_pending_auto_transaction(self.layout.runtime)
-            before_profiles = {
-                name: self.profile_stores[name].load() for name in ("day", "night")
+            before_profiles: dict[str, AccentProfile] = {
+                name: self.profile_stores[name].load() for name in PROFILE_NAMES
             }
             timestamp = self._timestamp(self.clock.now())
-            target_profiles = {}
-            for name in ("day", "night"):
+            target_profiles: dict[str, AccentProfile] = {}
+            for name in PROFILE_NAMES:
                 before_profile = before_profiles[name]
                 colorization_color = profile_colors[name].replace_colorization_rgb(
                     before_profile.colorization_color
@@ -268,12 +286,12 @@ class ConfigurationService:
                 profiles_verified=False,
             )
 
-        changed = {
+        changed: dict[str, bool] = {
             name: target_profiles[name] != before_profiles[name]
-            for name in ("day", "night")
+            for name in PROFILE_NAMES
         }
         try:
-            for name in ("day", "night"):
+            for name in PROFILE_NAMES:
                 if changed[name]:
                     self.profile_stores[name].replace_if_valid(target_profiles[name])
                 elif self.profile_stores[name].load() != before_profiles[name]:
@@ -302,8 +320,7 @@ class ConfigurationService:
                     )
                 ),
                 profiles_changed={
-                    name: False if restored else changed[name]
-                    for name in ("day", "night")
+                    name: False if restored else changed[name] for name in PROFILE_NAMES
                 },
                 profiles_verified=False,
                 profile_rollback_attempted=True,
@@ -349,7 +366,7 @@ class ConfigurationService:
             ),
             profiles_changed={
                 name: False if profiles_restored else changed[name]
-                for name in ("day", "night")
+                for name in PROFILE_NAMES
             },
             profiles_verified=False,
             profile_rollback_attempted=True,

@@ -66,7 +66,7 @@ uv run --group quality pyright
 `pyproject.toml` 的 `[tool.pyright]`；旧 `pyrightconfig.json` 已删除，发布源码清单和
 契约测试会阻止双配置回流。
 
-全源码采用 `basic` 基线；以下七个高价值边界进入 strict 棘轮：
+全源码采用 `basic` 基线；以下十二个高价值边界进入 strict 棘轮：
 
 - `scheduler/models.py`：任务 JSON 契约；
 - `lifecycle/installation.py`：安装记录与登记契约；
@@ -74,6 +74,11 @@ uv run --group quality pyright
 - `automation/recovery.py`：未完成自动事务恢复状态机；
 - `automation/contracts.py`、`automation/outcome.py`：恢复与编排共享的类型边界。
 - `accent_theme.py`：管理主题构建、`IThemeManager2` 索引验证及两层回滚边界。
+- `configuration_service.py`：配置、昼夜 profile 与任务定义的事务更新；
+- `maintenance_service.py`：维护动作、健康检查与修复边界；
+- `automation/backend.py`：自动入口到 Windows 外观事务的适配边界；
+- `scheduled_auto.py`：计划触发、暂停/延后与通知协调器；
+- `accent_service.py`：完整外观应用、日志绑定与跨阶段回滚。
 
 曾直接对 `scheduler/`、`lifecycle/`、`automation/` 三个目录启用 strict，探针产生
 138 个错误和 12 个警告；多数来自跨模块下划线助手和反序列化后的防御性
@@ -168,10 +173,11 @@ quick/affected、integration 和 release 模式中均无漏测、无重复，新
 
 目录稳定后已新增 12 项 GUI 启动、Explorer 恢复、Windows 组合适配器和 Task
 Scheduler 错误分支测试。该安全网发现并修复了一项准备阶段回滚缺陷：主题未改变时
-不再重复应用事务备份，只恢复发生部分写入的外观注册表。随后以单文件为单位评估
-`configuration_service.py`、
+不再重复应用事务备份，只恢复发生部分写入的外观注册表。测试总数由 579 项增至
+591 项。随后以单文件为单位评估 `configuration_service.py`、
 `maintenance_service.py`、`automation/backend.py`、`scheduled_auto.py` 和
-`accent_service.py`；只有 strict 零诊断的文件才加入 `[tool.pyright].strict`。
+`accent_service.py`；五个文件均已达到 strict 零诊断并加入棘轮。调整仅使用具名
+窄化助手和显式容器类型，未删除防御性校验，也未引入 `cast` 或忽略注释。
 
 任务桥只先建立只读耗时基线。没有达到 [ROADMAP_1.0.md](ROADMAP_1.0.md) 的性能
 阈值时，维持现有每次启动隔离 PowerShell 进程的实现是合格结论；不把无数据的批量
