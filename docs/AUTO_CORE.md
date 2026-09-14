@@ -1,6 +1,6 @@
 # ThemeScheduler 自动切换核心契约
 
-状态：`0.1.5` 候选契约。
+状态：`1.0.0` 发布候选契约。
 
 本文定义时间决策、可信边界、单实例、复合主题事务、退出码和中断恢复语义。持久化结构以 [PERSISTENCE.md](PERSISTENCE.md) 为准，Windows 主题接口以 [DESIGN.md](DESIGN.md) 为准。
 

@@ -38,7 +38,7 @@ class PreviewSetupRuntime:
         retained = self.operation != "install"
         return SetupPlan(
             operation=self.operation,
-            target_version="0.1.5-preview",
+            target_version="1.0.0-preview",
             installed_version=(None if self.operation == "install" else "0.1.0"),
             install_root=str(self.layout.program_root),
             data_root=str(self.layout.data_root),
@@ -97,7 +97,7 @@ class PreviewSetupRuntime:
         return SetupOutcome(
             result=self.result,
             operation=self.operation,
-            version="0.1.5-preview",
+            version="1.0.0-preview",
             verified=verified,
             rollback_attempted=failed,
             rollback_succeeded=rollback_succeeded,

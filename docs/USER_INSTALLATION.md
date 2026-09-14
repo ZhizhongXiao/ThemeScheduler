@@ -6,7 +6,7 @@
 计划和事务实现细节分别见 [Windows 打包方案](../packaging/README.md) 与
 [安装生命周期契约](INSTALLATION.md)。
 
-本指南功能说明对应 `0.1.5` 候选；当前正式分发版本仍以发布目录和 GitHub Release 为准。支持 Windows 11 x64，按当前用户安装：
+本指南功能说明对应 `1.0.0` 发布候选；正式分发版本仍以发布目录和 GitHub Release 为准。支持 Windows 11 x64，按当前用户安装：
 
 - 不要求预装 Python、uv、虚拟环境或 pywebview；
 - 通常不要求管理员权限；

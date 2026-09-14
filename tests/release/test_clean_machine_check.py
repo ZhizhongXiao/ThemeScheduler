@@ -56,7 +56,7 @@ class CleanMachineCheckTests(unittest.TestCase):
     def test_script_defaults_to_current_release_version(self) -> None:
         source = SCRIPT.read_text(encoding="utf-8")
 
-        self.assertIn('[string]$ExpectedVersion = "0.1.5"', source)
+        self.assertIn('[string]$ExpectedVersion = "1.0.0"', source)
 
     def test_script_requires_release_hash_instead_of_freezing_an_old_one(self) -> None:
         source = SCRIPT.read_text(encoding="utf-8")
