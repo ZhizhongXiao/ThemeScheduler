@@ -9,7 +9,10 @@ param(
     [int]$WaitParentPid = 0,
 
     [Parameter(Mandatory = $false)]
-    [int]$SignalWaitMilliseconds = 120000
+    [int]$SignalWaitMilliseconds = 120000,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$FinalizeProductRegistration
 )
 
 $ErrorActionPreference = 'Stop'
@@ -142,6 +145,56 @@ try {
         $process.Kill()
         if (-not $process.WaitForExit($forcedExitMilliseconds)) {
             throw "Uninstaller process $($process.Id) did not exit."
+        }
+    }
+    if ($FinalizeProductRegistration) {
+        $journalPath = [System.IO.Path]::Combine($resolved, 'journal.json')
+        $requestPath = [System.IO.Path]::Combine($resolved, 'request.json')
+        if (
+            -not [System.IO.File]::Exists($journalPath) -or
+            -not [System.IO.File]::Exists($requestPath)
+        ) {
+            throw 'Completed uninstall evidence is missing.'
+        }
+        $journal = Get-Content -LiteralPath $journalPath -Raw |
+            ConvertFrom-Json
+        $request = Get-Content -LiteralPath $requestPath -Raw |
+            ConvertFrom-Json
+        $expectedProgramRoot = [System.IO.Path]::GetFullPath(
+            [System.IO.Path]::Combine(
+                [System.Environment]::GetFolderPath('LocalApplicationData'),
+                'Programs',
+                'ThemeScheduler'
+            )
+        )
+        $requestedProgramRoot = [System.IO.Path]::GetFullPath(
+            [string]$request.programRoot
+        )
+        if (
+            $journal.kind -ne 'themescheduler.uninstall-journal' -or
+            $journal.status -ne 'completed' -or
+            $journal.completedSteps -notcontains 'registration-removed' -or
+            -not [string]::Equals(
+                $requestedProgramRoot,
+                $expectedProgramRoot,
+                [System.StringComparison]::OrdinalIgnoreCase
+            )
+        ) {
+            throw 'Registration cleanup is not authorized by completed evidence.'
+        }
+        $registrationPath = (
+            'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\' +
+            'ThemeScheduler'
+        )
+        if (Test-Path -LiteralPath $registrationPath) {
+            $registration = Get-Item -LiteralPath $registrationPath
+            if (@($registration.GetSubKeyNames()).Count -ne 0) {
+                throw 'Installed-app registration contains unexpected subkeys.'
+            }
+            Remove-Item -LiteralPath $registrationPath -Force
+        }
+        if (Test-Path -LiteralPath $registrationPath) {
+            throw 'Installed-app registration still exists after final cleanup.'
         }
     }
     $maximumAttempts = 60

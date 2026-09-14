@@ -435,6 +435,7 @@ class WindowsSelfCleanupScheduler:
             str(workspace),
             "-WaitPid",
             str(wait_pid),
+            "-FinalizeProductRegistration",
         ]
         if self.bootloader_parent_pid is not None:
             if (

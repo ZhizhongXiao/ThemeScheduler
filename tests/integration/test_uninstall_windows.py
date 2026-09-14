@@ -181,6 +181,7 @@ class UninstallWindowsAdapterTests(unittest.TestCase):
         self.assertIn(str(workspace / "cleanup.ps1"), command)
         self.assertIn(str(workspace), command)
         self.assertIn("55", command)
+        self.assertIn("-FinalizeProductRegistration", command)
         self.assertIn("-WaitParentPid", command)
         self.assertIn("44", command)
         self.assertEqual(kwargs["cwd"], str(workspace.parent.parent))
@@ -237,6 +238,19 @@ class UninstallWindowsAdapterTests(unittest.TestCase):
         )
         self.assertIn("$process.MainModule.FileName", script)
         self.assertIn("$process.Kill()", script)
+        self.assertIn("$FinalizeProductRegistration", script)
+        self.assertIn("$journal.status -ne 'completed'", script)
+        self.assertIn(
+            "$journal.completedSteps -notcontains 'registration-removed'",
+            script,
+        )
+        self.assertIn("GetFolderPath('LocalApplicationData')", script)
+        self.assertIn(
+            "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\",
+            script,
+        )
+        self.assertIn("$registration.GetSubKeyNames()", script)
+        self.assertIn("Remove-Item -LiteralPath $registrationPath -Force", script)
         self.assertIn(
             "$process.WaitForExit($naturalExitMilliseconds)",
             script,
