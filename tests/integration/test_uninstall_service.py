@@ -396,6 +396,40 @@ class IndependentUninstallServiceTests(unittest.TestCase):
         self.assertIn("Retry: attempt 2 failed", outcome.message)
         self.assertTrue(self.layout.program_root.exists())
 
+    def test_preflight_appearance_read_failure_is_retried_once(self) -> None:
+        self.populate()
+        results = iter(
+            (
+                AppearanceResult(
+                    appearance_applied=False,
+                    windows_verified=False,
+                    system_mode_preserved=None,
+                    paused_after=None,
+                    message="install backup was momentarily unavailable",
+                ),
+                AppearanceResult(message="retry verified"),
+            )
+        )
+        calls = []
+
+        def restore_appearance() -> AppearanceResult:
+            calls.append(True)
+            return next(results)
+
+        outcome = self.service(
+            self.request(
+                appearance=AppearanceChoice.RESTORE,
+                keep_config=False,
+                keep_logs=False,
+            ),
+            appearance=restore_appearance,
+        ).run()
+
+        self.assertEqual(outcome.result, "completed")
+        self.assertEqual(calls, [True, True])
+        self.assertTrue(outcome.appearance_restored)
+        self.assertFalse(self.layout.data_root.exists())
+
     def test_unsafe_pause_state_is_not_retried(self) -> None:
         self.populate()
         calls = []

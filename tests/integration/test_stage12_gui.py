@@ -490,6 +490,8 @@ class Stage12FrontendContractTests(unittest.TestCase):
         ]
         self.assertNotIn("dataRoot", summary_source)
         self.assertNotIn("executable", summary_source)
+        self.assertIn("核心状态：读取失败", summary_source)
+        self.assertIn('data.message || "后端未返回可用状态"', summary_source)
 
     def test_mutating_identity_repair_is_conditional_maintenance_action(self) -> None:
         maintenance = self.html[

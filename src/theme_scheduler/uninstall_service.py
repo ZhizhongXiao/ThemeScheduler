@@ -470,7 +470,7 @@ class IndependentUninstallService:
         first = self.appearance_restorer()
         if self._appearance_restore_verified(first):
             return
-        if first.paused_after is not True:
+        if not self._appearance_restore_retry_is_safe(first):
             raise UninstallServiceError(
                 f"Install appearance was not safely restored: {first.message}"
             )
@@ -489,6 +489,18 @@ class IndependentUninstallService:
             and outcome.windows_verified
             and outcome.system_mode_preserved is True
             and outcome.paused_after is True
+        )
+
+    @staticmethod
+    def _appearance_restore_retry_is_safe(
+        outcome: AppearanceRestoreOutcome,
+    ) -> bool:
+        if outcome.paused_after is True:
+            return True
+        return bool(
+            outcome.paused_after is None
+            and outcome.appearance_applied is False
+            and not outcome.windows_verified
         )
 
     def _remove_shortcuts(self) -> None:

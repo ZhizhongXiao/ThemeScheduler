@@ -489,6 +489,13 @@ function renderRecentLog(summary) {
 function diagnosticSummary() {
   const data = state.overview;
   if (!data) return "ThemeScheduler：状态尚未读取。";
+  if (!["success", "partial"].includes(data.result)) {
+    return [
+      "ThemeScheduler 诊断摘要",
+      "核心状态：读取失败",
+      `原因：${data.message || "后端未返回可用状态"}`,
+    ].join("\n");
+  }
   const lines = [
     "ThemeScheduler 诊断摘要",
     `读取时间：${data.now}`,
