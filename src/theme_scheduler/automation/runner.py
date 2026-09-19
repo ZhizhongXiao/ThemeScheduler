@@ -99,6 +99,7 @@ class AutoRunner(AutoFailureMixin, AutoRecoveryMixin):
         self.cleanup_callback = cleanup_callback or self._cleanup_runtime
         self.intent = intent
         self._active_transaction_id: str | None = None
+        self._force_apply_after_recovery = False
 
     @staticmethod
     def _iso(instant: datetime) -> str:
@@ -291,6 +292,8 @@ class AutoRunner(AutoFailureMixin, AutoRecoveryMixin):
                 ),
             )
         if plan.kind is not AutoPlanKind.NO_CHANGE:
+            return None
+        if self._force_apply_after_recovery:
             return None
         assert plan.target_profile is not None
         try:
@@ -671,6 +674,7 @@ class AutoRunner(AutoFailureMixin, AutoRecoveryMixin):
         """Execute the core while the caller already owns the shared lock."""
 
         self._active_transaction_id = None
+        self._force_apply_after_recovery = False
         recovery = self._recover_pending()
         if recovery is not None:
             return recovery

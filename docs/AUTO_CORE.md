@@ -108,7 +108,7 @@ Local\ThemeScheduler.Auto.<data-root-hash>
 
 恢复规则：
 
-- `planned` 中断：Windows 和状态尚未提交，保留失败证据后可重新计划；
+- `planned` 中断：只有兄弟强调色事务已持久记录 `applied` 且当前 Windows 仍匹配完整目标时，才能提升为 `windows-verified`；`prepared` 或 `failed` 即使看似已达到目标，也必须先完整回滚、保留失败证据后再重新计划；一旦恢复流程确认或执行了回滚，本轮必须强制重新应用目标，不能因状态文件已写着目标 profile 而走 `no-change`；
 - `windows-verified` 中断：只有当前 Windows 仍匹配完整目标且运行前状态哈希未变化时，才能补交状态；
 - `state-committed` 中断：补写恢复日志并完成清单，不重复应用；
 - 清单损坏、状态哈希变化或 Windows 无法匹配：返回 `data-untrusted` 或 `partial-failure`，等待显式修复。

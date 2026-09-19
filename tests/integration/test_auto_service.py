@@ -777,6 +777,127 @@ class AutoRunnerTests(unittest.TestCase):
             self.assertEqual(StateStore(layout.state).load().active_profile, "day")
             self.assertEqual(store.load().status, "completed")
 
+    def test_planned_with_prepared_journal_at_target_rolls_back_and_reapplies(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            layout = self._layout(
+                Path(directory),
+                state=_successful_state("day"),
+            )
+            after_state = AppState(False, "day", NOW_TEXT, "day", "success")
+            transaction_dir = layout.new_transaction_directory(NOW)
+            transaction_dir.mkdir()
+            store = AutoTransactionStore(transaction_dir / "auto.json")
+            store.create(
+                AutoTransaction(
+                    transaction_id=transaction_dir.name,
+                    status="planned",
+                    started_at=NOW_TEXT,
+                    updated_at=NOW_TEXT,
+                    target_profile="day",
+                    target_apps_theme="light",
+                    learn_profile=None,
+                    state_before_sha256=file_sha256(layout.state),
+                    state_after=after_state,
+                    state_after_sha256=json_document_sha256(after_state.as_dict()),
+                )
+            )
+            before = ThemeVisualState("0", 0xC4FFB900, "Dark", "Dark")
+            target = ThemeVisualState("0", 0xC4744DA9, "Light", "Light")
+            atomic_write_json(
+                transaction_dir / "journal.json",
+                {
+                    "kind": "themescheduler.accent-transaction",
+                    "schemaVersion": 2,
+                    "status": "prepared",
+                    "before": before.as_dict(),
+                    "target": target.as_dict(),
+                    "settingsTarget": {
+                        "appsTheme": "light",
+                        "systemTheme": "light",
+                        "startTaskbarAccent": False,
+                        "titleBordersAccent": True,
+                    },
+                },
+            )
+            windows = FakeWindows(target)
+            windows.start_taskbar_accent = False
+            windows.before_by_transaction[transaction_dir.resolve()] = before
+
+            outcome = self._runner(layout, windows).run()
+
+            self.assertIs(outcome.result, AutoResultKind.APPLIED)
+            self.assertFalse(outcome.recovered)
+            self.assertEqual(windows.rollback_count, 1)
+            self.assertEqual(windows.apply_count, 1)
+            self.assertEqual(windows.current, target)
+            self.assertEqual(StateStore(layout.state).load().active_profile, "day")
+            interrupted = store.load()
+            self.assertEqual(interrupted.status, "failed")
+            self.assertEqual(interrupted.error_code, "interrupted.rolled-back")
+            self.assertTrue(interrupted.rollback_succeeded)
+
+    def test_planned_with_prepared_journal_blocks_when_rollback_fails(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            layout = self._layout(Path(directory))
+            state_before = StateStore(layout.state).load()
+            after_state = AppState(False, "day", NOW_TEXT, "day", "success")
+            transaction_dir = layout.new_transaction_directory(NOW)
+            transaction_dir.mkdir()
+            store = AutoTransactionStore(transaction_dir / "auto.json")
+            store.create(
+                AutoTransaction(
+                    transaction_id=transaction_dir.name,
+                    status="planned",
+                    started_at=NOW_TEXT,
+                    updated_at=NOW_TEXT,
+                    target_profile="day",
+                    target_apps_theme="light",
+                    learn_profile=None,
+                    state_before_sha256=file_sha256(layout.state),
+                    state_after=after_state,
+                    state_after_sha256=json_document_sha256(after_state.as_dict()),
+                )
+            )
+            before = ThemeVisualState("0", 0xC4FFB900, "Dark", "Dark")
+            target = ThemeVisualState("0", 0xC4744DA9, "Light", "Light")
+            atomic_write_json(
+                transaction_dir / "journal.json",
+                {
+                    "kind": "themescheduler.accent-transaction",
+                    "schemaVersion": 2,
+                    "status": "prepared",
+                    "before": before.as_dict(),
+                    "target": target.as_dict(),
+                    "settingsTarget": {
+                        "appsTheme": "light",
+                        "systemTheme": "light",
+                        "startTaskbarAccent": False,
+                        "titleBordersAccent": True,
+                    },
+                },
+            )
+            windows = FakeWindows(target, rollback_succeeded=False)
+            windows.start_taskbar_accent = False
+
+            outcome = self._runner(layout, windows).run()
+
+            self.assertIs(outcome.result, AutoResultKind.PARTIAL_FAILURE)
+            self.assertTrue(outcome.recovered)
+            self.assertEqual(windows.rollback_count, 1)
+            self.assertEqual(windows.apply_count, 0)
+            self.assertEqual(StateStore(layout.state).load(), state_before)
+            interrupted = store.load()
+            self.assertEqual(interrupted.status, "partial")
+            self.assertEqual(
+                interrupted.error_code,
+                "interrupted.rollback-failed",
+            )
+            self.assertFalse(interrupted.rollback_succeeded)
+
     def test_state_committed_recovery_does_not_overwrite_manual_windows_change(
         self,
     ) -> None:

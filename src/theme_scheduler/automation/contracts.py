@@ -18,6 +18,7 @@ class AutoRunnerBindings:
     state_store: StateStore
     cleanup_callback: Callable[[Path], None]
     _active_transaction_id: str | None
+    _force_apply_after_recovery: bool
 
     def _outcome(
         self,

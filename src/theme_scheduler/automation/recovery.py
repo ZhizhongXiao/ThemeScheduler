@@ -348,11 +348,12 @@ class AutoRecoveryMixin(AutoRunnerBindings):
             target = theme_visual_state_from_dict(target_payload)
             before = theme_visual_state_from_dict(before_payload)
             current = self.windows.read_visual_state()
+            accent_status = accent.get("status")
             target_failures = self.windows.verify_transaction_target(
                 directory,
                 target,
             )
-            if current == target and not target_failures:
+            if accent_status == "applied" and current == target and not target_failures:
                 return store.save(
                     replace(
                         transaction,
@@ -361,7 +362,49 @@ class AutoRecoveryMixin(AutoRunnerBindings):
                         windows_target=target,
                     )
                 )
-            if current == before and (accent.get("status") in {"prepared", "failed"}):
+            if (
+                accent_status in {"prepared", "failed"}
+                and current == target
+                and not target_failures
+            ):
+                if not self.windows.rollback(directory):
+                    partial = store.save(
+                        replace(
+                            transaction,
+                            status="partial",
+                            updated_at=captured_at(),
+                            windows_target=target,
+                            error_code="interrupted.rollback-failed",
+                            message=(
+                                "Interrupted Windows transaction reached its target "
+                                "without durable applied evidence, and rollback failed."
+                            ),
+                            rollback_succeeded=False,
+                        )
+                    )
+                    return self._outcome(
+                        AutoResultKind.PARTIAL_FAILURE,
+                        partial.message or "Interrupted rollback failed.",
+                        target=transaction.target_profile,
+                        transaction=directory,
+                        recovered=True,
+                    )
+                store.save(
+                    replace(
+                        transaction,
+                        status="failed",
+                        updated_at=captured_at(),
+                        error_code="interrupted.rolled-back",
+                        message=(
+                            "Interrupted Windows transaction reached its target "
+                            "without durable applied evidence and was rolled back."
+                        ),
+                        rollback_succeeded=True,
+                    )
+                )
+                self._force_apply_after_recovery = True
+                return None
+            if current == before and accent_status in {"prepared", "failed"}:
                 store.save(
                     replace(
                         transaction,
@@ -372,6 +415,7 @@ class AutoRecoveryMixin(AutoRunnerBindings):
                         rollback_succeeded=True,
                     )
                 )
+                self._force_apply_after_recovery = True
                 return None
             partial = store.save(
                 replace(
