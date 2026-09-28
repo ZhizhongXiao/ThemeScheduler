@@ -1,9 +1,10 @@
-# ThemeScheduler 1.0.0 发布契约
+# ThemeScheduler 1.0.1 发布契约
 
 ## 1. 目标与范围
 
 本契约在 `0.1.5` 完整外观功能资格验收和 1.0 工程收口之后，生成面向 Windows 11
-x64、少量熟人分发的 `1.0.0` 正式候选。候选继续采用当前用户安装、单文件 Setup、
+x64、少量熟人分发的 `1.0.1` 维护版。该版本基于 `1.0.0`，包含通知消费清理和静态质量修复；
+候选继续采用当前用户安装、单文件 Setup、
 `onedir` 主程序和独立单文件卸载器。目标设备不需要 Python、pip、uv 或虚拟环境。
 
 `0.1.5 RC2` 的自动门禁、双构建和 Defender 结果只证明功能候选；测试结构、类型
@@ -25,7 +26,7 @@ x64、少量熟人分发的 `1.0.0` 正式候选。候选继续采用当前用�
 - `PYTHONHASHSEED=0`；
 - `SOURCE_DATE_EPOCH=1767225600`；
 - 最终构建前，`pyproject.toml`、包版本、三份 EXE 版本资源、安装器文案、用户文档
-  和载荷清单版本必须统一为 `1.0.0`；
+  和载荷清单版本必须统一为 `1.0.1`；
 - `assets/ThemeScheduler.ico` 为七尺寸确定性 ICO。
 
 无论 Git 工作树状态如何，发布候选都使用
@@ -58,8 +59,8 @@ uv sync --group build --group quality
 
 ```powershell
 .venv\Scripts\python.exe packaging\build_release.py `
-  --output-root artifacts\build\1.0.0-rcN `
-  --version 1.0.0 `
+  --output-root artifacts\build\1.0.1-release-a `
+  --version 1.0.1 `
   --python .venv\Scripts\python.exe `
   --test-report artifacts\test-reports\<release-report>.json
 ```
@@ -124,7 +125,7 @@ Setup 与用户说明。`dist/RELEASE-README.md` 明确说明未签名状态、�
 生命周期证据、0.1.4 当前外观读取验收和通过后的 0.1.5 完整外观矩阵，并执行最终
 候选的最小充分生命周期：
 
-- 通过 Setup 安装或升级 `1.0.0`，确认版本、GUI 与任务入口正常；
+- 通过 Setup 安装或升级 `1.0.1`，确认版本、GUI 与任务入口正常；
 - 昼间、夜间分别设置不同的 Windows 模式、应用模式、强调色和两个显示位置；
 - “导入当前 Windows 外观”必须同时读取两种模式、当前颜色和两个显示位置；
 - 导入只更新对应时段草稿，不立即保存、更新任务或改变 Windows 外观；
@@ -209,8 +210,9 @@ release 测试与 Coverage 棘轮，并在真实 `spotlight.theme` 上完成应�
 隔离进程曾对数据根和 HKCU 返回与桌面用户环境不同的虚拟视图，因此生命周期结论只采用
 资源管理器、控制面板及普通 Windows PowerShell 的真实用户上下文。
 
-`1.0.0` 的权威正式分发冻结在 `artifacts/releases/1.0.0`；该目录中的发布清单和
-`SHA256SUMS.txt` 与 Git 标签 `v1.0.0` 绑定。
+`1.0.0` 曾冻结在 `artifacts/releases/1.0.0`，其发布清单和 `SHA256SUMS.txt` 曾与
+Git 标签 `v1.0.0` 绑定。按用户要求，待 `1.0.1` 正式发布并确认附件可下载后，废弃
+`1.0.0` 发布包及 GitHub Release 附件；保留 `v1.0.0` 标签与 Git 源码历史供追溯。
 
 TS-142 已在另一台无 Python 的 Windows x64 设备完成 SmartScreen、首次安装、关闭
 GUI 后的计划边界、通知、`0.1.1 → 0.1.2` 六项数据保留升级及独立卸载验收。

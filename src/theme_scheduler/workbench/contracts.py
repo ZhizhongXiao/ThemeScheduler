@@ -19,6 +19,8 @@ from ..accent_profile import RgbColor
 from ..appearance import CurrentWindowsAppearance
 from ..config import AppConfig
 from ..core import Clock, ExecutionLock
+from ..health_contracts import HealthCheckPayload as HealthCheckSummary
+from ..health_contracts import HealthReportPayload as HealthReportData
 from ..scheduler import TaskSchedulerBackend
 from ..storage import UserDataLayout
 
@@ -148,23 +150,6 @@ class WorkspaceValidationResult(OperationResult, total=False):
     valid: Required[bool]
     config: ConfigSummary
     colors: dict[str, dict[str, int | str]]
-
-
-class HealthCheckSummary(TypedDict):
-    id: str
-    category: str
-    status: str
-    message: str
-    repairAction: str | None
-
-
-class HealthReportData(TypedDict):
-    kind: str
-    schemaVersion: int
-    capturedAt: str
-    status: str
-    summary: dict[str, int]
-    checks: list[HealthCheckSummary]
 
 
 class HealthResult(OperationResult, total=False):

@@ -7,12 +7,29 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import TypedDict
 
 HEALTH_REPORT_KIND = "themescheduler.health-report"
 HEALTH_REPORT_SCHEMA_VERSION = 1
 
 _IDENTIFIER_PATTERN = re.compile(r"[a-z0-9]+(?:[.-][a-z0-9]+)*")
+
+
+class HealthCheckPayload(TypedDict):
+    id: str
+    category: str
+    status: str
+    message: str
+    repairAction: str | None
+
+
+class HealthReportPayload(TypedDict):
+    kind: str
+    schemaVersion: int
+    capturedAt: str
+    status: str
+    summary: dict[str, int]
+    checks: list[HealthCheckPayload]
 
 
 class HealthCategory(str, Enum):  # noqa: UP042 - Preserve str(Enum) output pending a dedicated migration.
@@ -80,7 +97,7 @@ class HealthCheck:
         ):
             raise ValueError("Only repairable checks can expose a repair action.")
 
-    def as_dict(self) -> dict[str, Any]:
+    def as_dict(self) -> HealthCheckPayload:
         return {
             "id": self.check_id,
             "category": self.category.value,
@@ -117,7 +134,7 @@ class HealthReport:
             key=_STATUS_PRIORITY.__getitem__,
         )
 
-    def as_dict(self) -> dict[str, Any]:
+    def as_dict(self) -> HealthReportPayload:
         counts = Counter(check.status.value for check in self.checks)
         return {
             "kind": HEALTH_REPORT_KIND,

@@ -204,9 +204,7 @@ def build_plan(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
             project_root,
             action="delete",
             category="superseded-build",
-            reason=(
-                "Intermediate build superseded by a protected versioned release."
-            ),
+            reason=("Intermediate build superseded by a protected versioned release."),
         )
         for child in _children(build_root)
     )

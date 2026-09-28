@@ -32,7 +32,8 @@
 | 产物保留与清理 | [ARTIFACTS.md](ARTIFACTS.md) |
 | 测试命令与层级 | [TESTING.md](TESTING.md) |
 
-当前正式版本为 `1.0.0`，正式发布位于 `artifacts/releases/1.0.0`。昼夜完整外观、
+当前维护版目标为 `1.0.1`，本次构建完成后正式发布位于 `artifacts/releases/1.0.1`；
+`1.0.0` 的发布产物将在新版本确认发布后废弃。昼夜完整外观、
 自动门禁、Coverage、双构建、Defender、测试整理、高风险分支、12 文件 strict 棘轮、
 任务桥测量、动态主题兼容和最终生命周期验收均已完成。0.1.2 的无 Python Windows x64
 TS-142 兼容性证据继续有效。

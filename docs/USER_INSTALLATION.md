@@ -6,7 +6,7 @@
 计划和事务实现细节分别见 [Windows 打包方案](../packaging/README.md) 与
 [安装生命周期契约](INSTALLATION.md)。
 
-本指南功能说明对应 `1.0.0` 发布候选；正式分发版本仍以发布目录和 GitHub Release 为准。支持 Windows 11 x64，按当前用户安装：
+本指南功能说明对应 `1.0.1` 维护版候选；正式分发版本仍以发布目录和 GitHub Release 为准。支持 Windows 11 x64，按当前用户安装：
 
 - 不要求预装 Python、uv、虚拟环境或 pywebview；
 - 通常不要求管理员权限；
@@ -19,7 +19,7 @@
 正式安装器位于发布目录：
 
 ```text
-artifacts/releases/1.0.0/dist/ThemeScheduler-Setup.exe
+artifacts/releases/1.0.1/dist/ThemeScheduler-Setup.exe
 ```
 
 正式 SHA-256 以同目录的 `SHA256SUMS.txt` 为准，不从历史说明复制旧版本哈希。

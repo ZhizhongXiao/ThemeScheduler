@@ -32,24 +32,28 @@ class GuiApi(
 ):
     """The only object exposed to JavaScript by pywebview."""
 
-    _CONFIG_FIELDS = frozenset({
-        "dayStart",
-        "nightStart",
-        "dayAppsTheme",
-        "nightAppsTheme",
-        "daySystemTheme",
-        "nightSystemTheme",
-        "dayStartTaskbarAccent",
-        "nightStartTaskbarAccent",
-        "dayTitleBordersAccent",
-        "nightTitleBordersAccent",
-        "notifyErrors",
-        "notifyStatusChanges",
-    })
-    _WORKSPACE_FIELDS = _CONFIG_FIELDS | frozenset({
-        "dayColor",
-        "nightColor",
-    })
+    _CONFIG_FIELDS = frozenset(
+        {
+            "dayStart",
+            "nightStart",
+            "dayAppsTheme",
+            "nightAppsTheme",
+            "daySystemTheme",
+            "nightSystemTheme",
+            "dayStartTaskbarAccent",
+            "nightStartTaskbarAccent",
+            "dayTitleBordersAccent",
+            "nightTitleBordersAccent",
+            "notifyErrors",
+            "notifyStatusChanges",
+        }
+    )
+    _WORKSPACE_FIELDS = _CONFIG_FIELDS | frozenset(
+        {
+            "dayColor",
+            "nightColor",
+        }
+    )
 
     def __init__(
         self,
