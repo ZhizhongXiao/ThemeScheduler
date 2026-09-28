@@ -543,11 +543,11 @@ class FileDeploymentService:
     ) -> DeploymentOutcome:
         # A helper may durably advance a journal before its checkpoint raises.
         # Reload the latest facts so rollback cannot move progress backwards.
-        try:
+        try:  # noqa: SIM105 - A failed journal reload must not replace the mutation failure.
             lifecycle = lifecycle_store.load()
         except Exception:
             pass
-        try:
+        try:  # noqa: SIM105 - A failed journal reload must not replace the mutation failure.
             journal = deployment_store.load()
         except Exception:
             pass

@@ -22,7 +22,7 @@ class NotificationProtocolError(ContractError):
     """Raised when a notification action URI is not canonical and trusted."""
 
 
-class NotificationAction(str, Enum):
+class NotificationAction(str, Enum):  # noqa: UP042 - Preserve str(Enum) output pending a dedicated migration.
     SKIP = "skip"
     DELAY = "delay"
     CONFIRM = "confirm"

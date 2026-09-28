@@ -13,6 +13,8 @@ from typing import Any
 from .errors import ThemeSchedulerRuntimeError
 from .notification_contracts import (
     APP_USER_MODEL_ID,
+    PREPARE_TOAST_GROUP,
+    PREPARE_TOAST_TAG,
     NotificationCategory,
     NotificationDelivery,
     NotificationDeliveryResult,
@@ -151,6 +153,8 @@ class WindowsNotificationBackend:
         body: str,
         buttons: list[dict[str, str]],
         launch: str | None = None,
+        tag: str | None = None,
+        group: str | None = None,
     ) -> dict[str, Any]:
         request = {
             "appUserModelId": APP_USER_MODEL_ID,
@@ -167,6 +171,10 @@ class WindowsNotificationBackend:
         }
         if launch is not None:
             request["launch"] = launch
+        if tag is not None:
+            request["tag"] = tag
+        if group is not None:
+            request["group"] = group
         return request
 
     def _deliver(self, request: Mapping[str, Any]) -> NotificationDelivery:
@@ -201,8 +209,35 @@ class WindowsNotificationBackend:
                 title=str(payload["title"]),
                 body=str(payload["body"]),
                 buttons=payload["buttons"],
+                tag=PREPARE_TOAST_TAG,
+                group=PREPARE_TOAST_GROUP,
             )
         )
+
+    def clear_prepare(self) -> NotificationDelivery:
+        try:
+            payload = self._run("RemovePrepare")
+            if (
+                payload.get("removed") is not True
+                or payload.get("notificationSent") is not False
+            ):
+                raise WindowsNotificationError(
+                    f"Notification removal returned invalid fields: {payload!r}"
+                )
+            return NotificationDelivery(
+                NotificationDeliveryResult.SENT,
+                False,
+                "The switch reminder was removed from notification history.",
+            )
+        except Exception as exc:
+            detail = _single_line(
+                f"Notification removal failed: {type(exc).__name__}: {exc}"
+            )
+            return NotificationDelivery(
+                NotificationDeliveryResult.FAILED,
+                False,
+                detail,
+            )
 
     def send_status(self, request: NotificationRequest) -> NotificationDelivery:
         payload = request.as_dict()

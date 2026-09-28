@@ -341,7 +341,7 @@ ThemeScheduler/
 | `notification_action_service.py` | 严格消费安全 URI 与一次性令牌；确认/跳过只改决定，延迟事务式替换一次性触发对，不直接切换主题 |
 | `cli/notification_action.py` | 无标准流的安装态 URI 协议入口；切换动作保持无 GUI，固定 `health/` 动作只打开或聚焦维护区并触发只读检查 |
 | `gui_activation.py` | 使用当前会话命名事件唤醒已打开的按需 GUI；不建立常驻服务、磁盘队列或轮询进程 |
-| `notifications_windows.py` | 隔离调用系统内置 WinRT PowerShell 桥，隐藏辅助进程并将投递失败降级为结果 |
+| `notifications_windows.py` | 隔离调用系统内置 WinRT PowerShell 桥，隐藏辅助进程，将投递失败降级为结果，并按固定 tag/group 撤回已消费的切换预告 |
 | `protocol_registration.py` / `protocol_registration_windows.py` | 固定协议命令、注册表树捕获、严格读取、写入、删除与精确恢复 |
 | `windows_identity.py` | 设置、读回并只读检查正式进程的显式 AppUserModelID |
 | `notification_identity_service.py` | 显式修复开始菜单快捷方式、已有桌面快捷方式及安全 URI 协议；失败时按原始字节和注册表树回滚 |

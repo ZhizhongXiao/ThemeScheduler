@@ -48,7 +48,7 @@ class FakeRuntime:
             False,
         )
 
-    def default_options(self, _plan: SetupPlan) -> SetupOptions:
+    def default_options(self, plan: SetupPlan) -> SetupOptions:
         return SetupOptions(True)
 
     def launch_installed_app(self) -> None:
@@ -100,7 +100,7 @@ def wait_for_finish(api: SetupGuiApi, operation_id: str) -> dict:
 
 class SetupGuiApiTests(unittest.TestCase):
     def test_status_exposes_only_frozen_plan_defaults_and_paths(self) -> None:
-        result = SetupGuiApi(FakeRuntime()).get_status()  # type: ignore[arg-type]
+        result = SetupGuiApi(FakeRuntime()).get_status()
         self.assertTrue(result["ok"])
         self.assertEqual(result["plan"]["operation"], "install")
         self.assertTrue(result["defaults"]["desktopShortcut"])
@@ -121,7 +121,7 @@ class SetupGuiApiTests(unittest.TestCase):
         runtime = FakeRuntime()
         payload = SetupOptions.defaults().as_dict()
 
-        result = SetupGuiApi(runtime).validate_options(payload)  # type: ignore[arg-type]
+        result = SetupGuiApi(runtime).validate_options(payload)
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["options"], payload)
@@ -132,7 +132,7 @@ class SetupGuiApiTests(unittest.TestCase):
         options = SetupOptions(True)
         with tempfile.TemporaryDirectory() as temporary:
             log_root = Path(temporary) / "logs"
-            api = SetupGuiApi(  # type: ignore[arg-type]
+            api = SetupGuiApi(
                 runtime,
                 log_root=log_root,
             )
@@ -157,7 +157,7 @@ class SetupGuiApiTests(unittest.TestCase):
         payload = SetupOptions.defaults().as_dict()
         payload["installRoot"] = r"C:\Other"
 
-        result = SetupGuiApi(runtime).start_install(payload)  # type: ignore[arg-type]
+        result = SetupGuiApi(runtime).start_install(payload)
 
         self.assertFalse(result["ok"])
         self.assertIsNone(runtime.received)
@@ -166,7 +166,7 @@ class SetupGuiApiTests(unittest.TestCase):
         runtime = FakeRuntime(block=True)
         closed: list[bool] = []
         with tempfile.TemporaryDirectory() as temporary:
-            api = SetupGuiApi(  # type: ignore[arg-type]
+            api = SetupGuiApi(
                 runtime,
                 close_window=lambda: closed.append(True),
                 log_root=Path(temporary),
@@ -192,7 +192,7 @@ class SetupGuiApiTests(unittest.TestCase):
     ) -> None:
         runtime = FakeRuntime(raise_error=True)
         with tempfile.TemporaryDirectory() as temporary:
-            api = SetupGuiApi(  # type: ignore[arg-type]
+            api = SetupGuiApi(
                 runtime,
                 log_root=Path(temporary),
             )
@@ -208,7 +208,7 @@ class SetupGuiApiTests(unittest.TestCase):
         runtime = FakeRuntime()
         opened: list[Path] = []
         with tempfile.TemporaryDirectory() as temporary:
-            api = SetupGuiApi(  # type: ignore[arg-type]
+            api = SetupGuiApi(
                 runtime,
                 log_root=Path(temporary),
                 open_path=opened.append,
@@ -221,16 +221,18 @@ class SetupGuiApiTests(unittest.TestCase):
             self.assertEqual(opened[0].parent, Path(temporary))
 
     def test_close_before_window_binding_reports_not_ready(self) -> None:
-        api = SetupGuiApi(FakeRuntime())  # type: ignore[arg-type]
+        api = SetupGuiApi(FakeRuntime())
         result = api.close_window()
         self.assertFalse(result["ok"])
-        self.assertIn("尚未就绪", result["error"])
+        error = result["error"]
+        assert isinstance(error, str)
+        self.assertIn("尚未就绪", error)
 
     def test_success_completion_can_launch_gui_or_only_close(self) -> None:
         runtime = FakeRuntime()
         closed: list[bool] = []
         with tempfile.TemporaryDirectory() as temporary:
-            api = SetupGuiApi(  # type: ignore[arg-type]
+            api = SetupGuiApi(
                 runtime,
                 close_window=lambda: closed.append(True),
                 log_root=Path(temporary),
@@ -248,7 +250,7 @@ class SetupGuiApiTests(unittest.TestCase):
         runtime = FakeRuntime()
         closed = []
         with tempfile.TemporaryDirectory() as temporary:
-            api = SetupGuiApi(  # type: ignore[arg-type]
+            api = SetupGuiApi(
                 runtime,
                 close_window=lambda: closed.append(True),
                 log_root=Path(temporary),
@@ -303,8 +305,8 @@ class SetupGuiApiTests(unittest.TestCase):
                     (root / "ThemeScheduler").resolve(),
                 ),
             )
-            runtime._stage = lambda progress, stage: progress(stage)  # type: ignore[method-assign]
-            api = SetupGuiApi(runtime, log_root=root / "preview-logs")  # type: ignore[arg-type]
+            runtime._stage = lambda progress, stage: progress(stage)
+            api = SetupGuiApi(runtime, log_root=root / "preview-logs")
 
             status = api.get_status()
             started = api.start_install(status["defaults"])

@@ -37,6 +37,7 @@ where = ["src"]
 
 [tool.pyright]
 include = ["src/theme_scheduler"]
+extraPaths = ["packaging"]
 venvPath = "."
 venv = ".venv"
 strict = [

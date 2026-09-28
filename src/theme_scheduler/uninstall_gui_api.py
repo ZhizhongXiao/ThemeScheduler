@@ -194,14 +194,14 @@ class UninstallGuiApi:
         return {
             "ok": True,
             "allowed": allowed,
-            "reason": ("" if allowed else "卸载正在进行，完成前不能关闭窗口。"),
+            "reason": ("" if allowed else "卸载正在进行，完成前不能关闭窗口。"),  # noqa: RUF001 - Preserve native Chinese UI punctuation.
         }
 
     def close_window(self) -> dict[str, bool | str]:
         if not self.window_close_allowed():
             return {
                 "ok": False,
-                "error": "卸载正在进行，完成前不能关闭窗口。",
+                "error": "卸载正在进行，完成前不能关闭窗口。",  # noqa: RUF001 - Preserve native Chinese UI punctuation.
             }
         callback = self._close_window
         if callback is None:
@@ -232,7 +232,7 @@ class UninstallGuiApi:
         if not self.window_close_allowed():
             return {
                 "ok": False,
-                "error": "卸载正在进行，完成前不能退出。",
+                "error": "卸载正在进行，完成前不能退出。",  # noqa: RUF001 - Preserve native Chinese UI punctuation.
             }
         close_guard = self._close_guard
         if close_guard is None:

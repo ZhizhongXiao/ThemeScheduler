@@ -17,7 +17,7 @@ class ControlExitCode(IntEnum):
     FATAL_FAILURE = 50
 
 
-class ControlResultKind(str, Enum):
+class ControlResultKind(str, Enum):  # noqa: UP042 - Preserve str(Enum) output pending a dedicated migration.
     CHANGED = "changed"
     NO_CHANGE = "no-change"
     ALREADY_RUNNING = "already-running"

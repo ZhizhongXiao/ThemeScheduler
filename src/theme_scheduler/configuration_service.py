@@ -16,7 +16,7 @@ from .accent_profile import (
 from .config import AppConfig, ConfigStore
 from .control_service import ensure_no_pending_auto_transaction
 from .core import Clock, ExecutionLock, SystemClock
-from .log_policy import EventLogWriter, LogEvent
+from .log_policy import EventLogSink, EventLogWriter, LogEvent
 from .scheduler import (
     SchedulerMutationError,
     TaskSchedulerBackend,
@@ -53,7 +53,7 @@ def _require_profile_colors(value: object) -> dict[str, RgbColor]:
     return colors
 
 
-class ConfigurationResultKind(str, Enum):
+class ConfigurationResultKind(str, Enum):  # noqa: UP042 - Preserve str(Enum) output pending a dedicated migration.
     CHANGED = "changed"
     NO_CHANGE = "no-change"
     ALREADY_RUNNING = "already-running"
@@ -128,7 +128,7 @@ class ConfigurationService:
         executable: str,
         user_id: str,
         config_store: ConfigStore | None = None,
-        event_log: EventLogWriter | None = None,
+        event_log: EventLogSink | None = None,
         clock: Clock | None = None,
         pending_store: PendingSwitchStore | None = None,
         profile_stores: Mapping[str, AccentProfileStore] | None = None,

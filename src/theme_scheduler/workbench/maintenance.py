@@ -53,30 +53,27 @@ class GuiMaintenanceMixin(WorkbenchBindings):
             try:
                 report = self._health_service_factory().inspect()
                 response = report.as_dict()
-                response.update(
-                    {
-                        "action": "check-health",
-                        "result": (
-                            "success"
-                            if response["status"] == "healthy"
-                            else response["status"]
-                        ),
-                        "message": {
-                            "healthy": "健康检查完成：全部正常。",
-                            "warning": ("健康检查完成：发现警告，请查看详细报告。"),
-                            "repairable": (
-                                "健康检查完成：发现可修复问题，请查看报告后选择修复。"
-                            ),
-                            "action-required": (
-                                "健康检查完成：发现需要用户处理的问题。"
-                            ),
-                        }[response["status"]],
-                        "dataChanged": False,
-                        "windowsChanged": False,
-                        "taskSchedulerChanged": False,
-                    }
+                status = response["status"]
+                messages = {
+                    "healthy": "健康检查完成：全部正常。",  # noqa: RUF001 - Preserve native Chinese UI punctuation.
+                    "warning": "健康检查完成：发现警告，请查看详细报告。",  # noqa: RUF001 - Preserve native Chinese UI punctuation.
+                    "repairable": "健康检查完成：发现可修复问题，请查看报告后选择修复。",  # noqa: RUF001 - Preserve native Chinese UI punctuation.
+                    "action-required": "健康检查完成：发现需要用户处理的问题。",  # noqa: RUF001 - Preserve native Chinese UI punctuation.
+                }
+                return HealthResult(
+                    action="check-health",
+                    result="success" if status == "healthy" else status,
+                    message=messages[status],
+                    dataChanged=False,
+                    windowsChanged=False,
+                    taskSchedulerChanged=False,
+                    kind=response["kind"],
+                    schemaVersion=response["schemaVersion"],
+                    capturedAt=response["capturedAt"],
+                    status=status,
+                    summary=response["summary"],
+                    checks=response["checks"],
                 )
-                return HealthResult(**response)
             except Exception as exc:
                 return HealthResult(**self._error("check-health", exc))
 

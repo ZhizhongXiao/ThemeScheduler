@@ -7,7 +7,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from .accent_service import (
     AccentApplyOutcome,
@@ -17,7 +17,7 @@ from .accent_theme import LiveThemeApplyError
 from .backup import InstallBackup, InstallBackupStore
 from .control_service import ensure_no_pending_auto_transaction
 from .core import Clock, ExecutionLock, SystemClock
-from .log_policy import EventLogWriter, LogEvent
+from .log_policy import EventLogSink, EventLogWriter, LogEvent
 from .state import AppState, StateStore
 from .storage import UserDataLayout
 
@@ -27,7 +27,11 @@ AppearanceApplier = Callable[
 ]
 
 
-class MaintenanceRestoreResult(str, Enum):
+class VerifiedInstallBackupReader(Protocol):
+    def load_verified(self) -> InstallBackup: ...
+
+
+class MaintenanceRestoreResult(str, Enum):  # noqa: UP042 - Preserve str(Enum) output pending a dedicated migration.
     RESTORED = "restored"
     ALREADY_RUNNING = "already-running"
     DATA_UNTRUSTED = "data-untrusted"
@@ -94,9 +98,9 @@ class MaintenanceService:
         layout: UserDataLayout,
         execution_lock: ExecutionLock,
         *,
-        backup_store: InstallBackupStore | None = None,
+        backup_store: VerifiedInstallBackupReader | None = None,
         state_store: StateStore | None = None,
-        event_log: EventLogWriter | None = None,
+        event_log: EventLogSink | None = None,
         clock: Clock | None = None,
         appearance_applier: AppearanceApplier | None = None,
     ) -> None:

@@ -7,13 +7,13 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
 from enum import Enum
 from time import sleep
-from typing import Any
+from typing import Any, Protocol
 
 from .accent_profile import AccentProfileStore
-from .automation import AutoRunner, AutoRunOutcome
+from .automation import AutoRunOutcome
 from .config import AppConfig, ConfigStore
 from .core import AutoExitCode, AutoResultKind, Clock, ExecutionLock, SystemClock
-from .log_policy import EventLogWriter, LogEvent
+from .log_policy import EventLogSink, EventLogWriter, LogEvent
 from .notification_contracts import (
     NotificationDelivery,
     NotificationDeliveryResult,
@@ -38,7 +38,7 @@ from .switch_override import (
 )
 
 
-class ScheduledRunKind(str, Enum):
+class ScheduledRunKind(str, Enum):  # noqa: UP042 - Preserve str(Enum) output pending a dedicated migration.
     PREPARED = "prepared"
     PREPARE_SUPPRESSED = "prepare-suppressed"
     WAITING = "waiting"
@@ -55,6 +55,10 @@ class FixedBoundary:
     profile: str
     scheduled_at: datetime
     next_fixed_at: datetime
+
+
+class ScheduledCoreRunner(Protocol):
+    def run_locked(self) -> AutoRunOutcome: ...
 
 
 @dataclass(frozen=True)
@@ -126,7 +130,7 @@ def upcoming_fixed_boundary(config: AppConfig, now: datetime) -> FixedBoundary:
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("Schedule coordination requires an aware datetime.")
     candidates: list[tuple[datetime, str]] = []
-    for offset in range(0, 3):
+    for offset in range(3):
         candidate_day = now.date() + timedelta(days=offset)
         candidates.extend(
             (
@@ -157,7 +161,7 @@ class ScheduledAutoCoordinator:
         self,
         layout: UserDataLayout,
         execution_lock: ExecutionLock,
-        core_runner: AutoRunner,
+        core_runner: ScheduledCoreRunner,
         tasks: TaskSchedulerBackend,
         notifier: ScheduledNotificationBackend,
         *,
@@ -167,7 +171,7 @@ class ScheduledAutoCoordinator:
         config_store: ConfigStore | None = None,
         state_store: StateStore | None = None,
         pending_store: PendingSwitchStore | None = None,
-        event_log: EventLogWriter | None = None,
+        event_log: EventLogSink | None = None,
         dedup_store: NotificationDedupStore | None = None,
         sleeper: Callable[[float], None] = sleep,
     ) -> None:
@@ -281,6 +285,23 @@ class ScheduledAutoCoordinator:
                 ],
             )
         return self._notification_fallback(now, delivery, pending.target_profile)
+
+    def _clear_prepare_safely(
+        self,
+        now: datetime,
+        target: str | None,
+    ) -> None:
+        try:
+            delivery = self.notifier.clear_prepare()
+        except Exception as exc:
+            delivery = NotificationDelivery(
+                NotificationDeliveryResult.FAILED,
+                False,
+                (f"Prepare notification cleanup failed: {type(exc).__name__}: {exc}")[
+                    :500
+                ],
+            )
+        self._notification_fallback(now, delivery, target)
 
     def _log_notification_failure_safely(
         self,
@@ -470,6 +491,7 @@ class ScheduledAutoCoordinator:
         context.pending_changed = context.pending_changed or cleared
         context.task_changed = context.task_changed or repaired
         context.pending = None
+        self._clear_prepare_safely(context.now, pending.target_profile)
         return None
 
     def _cleanup_disabled_notifications(

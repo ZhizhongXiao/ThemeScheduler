@@ -194,6 +194,7 @@ class PendingSwitchTests(unittest.TestCase):
             now=prepare,
         ).arm(now=prepare, token=TOKEN_1)
 
+        assert value.prepared_at is not None
         self.assertEqual(value.prepared_at.microsecond, 0)
         self.assertEqual(value.updated_at.microsecond, 0)
         with tempfile.TemporaryDirectory() as raw:

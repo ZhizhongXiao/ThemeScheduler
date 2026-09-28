@@ -107,15 +107,15 @@ def measure[T](
 ) -> tuple[list[float], T]:
     if warmups < 0 or samples < 1:
         raise ValueError("Warmups must be non-negative and samples must be positive.")
-    result: T
     for _ in range(warmups):
-        result = operation()
+        operation()
     timings: list[float] = []
+    results: list[T] = []
     for _ in range(samples):
         started = time.perf_counter()
-        result = operation()
+        results.append(operation())
         timings.append(time.perf_counter() - started)
-    return timings, result
+    return timings, results[-1]
 
 
 def evaluate_batch_read(

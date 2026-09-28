@@ -8,6 +8,7 @@ import unittest
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Never
 from unittest.mock import patch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -44,6 +45,7 @@ from theme_scheduler.workbench import (
     ShellActions,
     create_live_gui_api,
 )
+from theme_scheduler.workbench.contracts import HealthReportData
 
 USER_ID = r"DESKTOP-TEST\Example"
 
@@ -134,7 +136,7 @@ class FakeMaintenanceService:
 
 
 class FakeHealthReport:
-    def as_dict(self):
+    def as_dict(self) -> HealthReportData:
         return {
             "kind": "themescheduler.health-report",
             "schemaVersion": 1,
@@ -289,8 +291,8 @@ class GuiApiTests(unittest.TestCase):
                 ),
                 accent_source="winrt-ui-settings",
             ),
-            shell_actions=self.shell,  # type: ignore[arg-type]
-            clock=FixedClock(),  # type: ignore[arg-type]
+            shell_actions=self.shell,
+            clock=FixedClock(),
             allow_live_writes=True,
         )
 
@@ -338,14 +340,14 @@ class GuiApiTests(unittest.TestCase):
         result = self.api.read_current_windows_appearance()
 
         self.assertEqual(result["result"], "success")
-        self.assertEqual(result["appMode"], "light")
-        self.assertEqual(result["systemMode"], "dark")
-        self.assertEqual(result["color"]["hex"], "#744DA9")
-        self.assertEqual(result["colorizationColor"], "0XD0744DA9")
-        self.assertEqual(result["accentSource"], "winrt-ui-settings")
-        self.assertFalse(result["sourcesDiverged"])
-        self.assertEqual(result["divergences"], [])
-        self.assertIsNone(result["themeAppearance"])
+        self.assertEqual(result.get("appMode"), "light")
+        self.assertEqual(result.get("systemMode"), "dark")
+        self.assertEqual(result.get("color", {}).get("hex"), "#744DA9")
+        self.assertEqual(result.get("colorizationColor"), "0XD0744DA9")
+        self.assertEqual(result.get("accentSource"), "winrt-ui-settings")
+        self.assertFalse(result.get("sourcesDiverged"))
+        self.assertEqual(result.get("divergences"), [])
+        self.assertIsNone(result.get("themeAppearance"))
         self.assertFalse(result["dataChanged"])
         self.assertFalse(result["windowsChanged"])
         self.assertFalse(result["taskSchedulerChanged"])
@@ -360,10 +362,12 @@ class GuiApiTests(unittest.TestCase):
         result = self.api.get_overview()
 
         self.assertTrue(result["profiles"]["day"]["valid"])
-        self.assertEqual(
-            result["profiles"]["day"]["raw"]["accent"]["colorizationColor"],
-            "0XD0744DA9",
-        )
+        profile = result["profiles"]["day"]
+        raw_profile = profile.get("raw")
+        assert isinstance(raw_profile, dict)
+        accent = raw_profile.get("accent")
+        assert isinstance(accent, dict)
+        self.assertEqual(accent.get("colorizationColor"), "0XD0744DA9")
 
     def test_overview_keeps_core_status_when_scheduler_is_unavailable(self) -> None:
         api = GuiApi(
@@ -371,8 +375,8 @@ class GuiApiTests(unittest.TestCase):
             executable=self.executable,
             scheduler_backend=FailingReadScheduler(),
             lock_factory=FakeLock,
-            shell_actions=self.shell,  # type: ignore[arg-type]
-            clock=FixedClock(),  # type: ignore[arg-type]
+            shell_actions=self.shell,
+            clock=FixedClock(),
         )
 
         result = api.get_overview()
@@ -418,7 +422,11 @@ class GuiApiTests(unittest.TestCase):
         )
 
         self.assertTrue(valid["valid"])
-        self.assertEqual(valid["colors"]["day"]["hex"], "#744DA9")
+        colors = valid.get("colors")
+        assert isinstance(colors, dict)
+        day_color = colors.get("day")
+        assert isinstance(day_color, dict)
+        self.assertEqual(day_color.get("hex"), "#744DA9")
         self.assertFalse(invalid["valid"])
         self.assertIn("differ", invalid["message"])
         self.assertEqual(self.scheduler.register_count, 0)
@@ -468,8 +476,8 @@ class GuiApiTests(unittest.TestCase):
             executable=self.executable,
             scheduler_backend=self.scheduler,
             lock_factory=FakeLock,
-            shell_actions=self.shell,  # type: ignore[arg-type]
-            clock=FixedClock(),  # type: ignore[arg-type]
+            shell_actions=self.shell,
+            clock=FixedClock(),
         )
 
         workspace = preview.save_workspace(workspace_payload(), True)
@@ -508,8 +516,8 @@ class GuiApiTests(unittest.TestCase):
                 ),
                 accent_source="winrt-ui-settings",
             ),
-            shell_actions=self.shell,  # type: ignore[arg-type]
-            clock=FixedClock(),  # type: ignore[arg-type]
+            shell_actions=self.shell,
+            clock=FixedClock(),
             allow_live_writes=False,
         )
 
@@ -517,8 +525,8 @@ class GuiApiTests(unittest.TestCase):
         saved = preview.save_workspace(workspace_payload(), True)
 
         self.assertEqual(imported["result"], "success")
-        self.assertEqual(imported["appMode"], "dark")
-        self.assertEqual(imported["color"]["hex"], "#FFB900")
+        self.assertEqual(imported.get("appMode"), "dark")
+        self.assertEqual(imported.get("color", {}).get("hex"), "#FFB900")
         self.assertFalse(imported["dataChanged"])
         self.assertFalse(imported["windowsChanged"])
         self.assertEqual(saved["result"], "blocked")
@@ -619,7 +627,7 @@ class GuiApiTests(unittest.TestCase):
     def test_manual_application_exception_is_a_partial_failure(self) -> None:
         self.create_profiles()
 
-        def fail() -> object:
+        def fail() -> Never:
             raise OSError("manual apply failed")
 
         self.api._manual_appearance_service_factory = fail
@@ -682,7 +690,7 @@ class GuiApiTests(unittest.TestCase):
         repaired = self.api.repair_notification_identity(True)
 
         self.assertEqual(checked["result"], "repairable")
-        self.assertEqual(checked["status"], "repairable")
+        self.assertEqual(checked.get("status"), "repairable")
         self.assertFalse(checked["windowsChanged"])
         self.assertEqual(repaired["result"], "changed")
         self.assertEqual(self.identity_repair.calls, 1)
@@ -911,7 +919,9 @@ class GuiAssetsAndRuntimeTests(unittest.TestCase):
                 executable,
                 allow_live_writes=True,
             )
-            service = api._manual_appearance_service_factory()
+            factory = api._manual_appearance_service_factory
+            assert factory is not None
+            service = factory()
 
         self.assertEqual(type(service).__name__, "ManualAppearanceService")
 

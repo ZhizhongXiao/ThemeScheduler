@@ -35,8 +35,12 @@ if str(PACKAGING_ROOT) not in sys.path:
 from release_tools import (  # noqa: E402
     TEST_REPORT_SCHEMA_VERSION,
     capture_source_manifest,
-    release_quality_commands,
 )
+from release_tools import (  # noqa: E402
+    release_quality_commands as _release_quality_commands,
+)
+
+release_quality_commands = _release_quality_commands
 
 GROUPS: dict[str, dict[str, tuple[str, ...]]] = {
     "setup": {

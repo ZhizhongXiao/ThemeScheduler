@@ -168,6 +168,9 @@ class MemoryTasks:
         self.register_error = register_error
         self.register_count = 0
 
+    def current_user_id(self) -> str:
+        return USER_ID
+
     def read(self, task_path: str) -> TaskSpec | None:
         if self.task is None or self.task.task_path != task_path:
             return None

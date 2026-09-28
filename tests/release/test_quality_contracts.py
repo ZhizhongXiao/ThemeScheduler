@@ -82,7 +82,7 @@ def dependency_cycles(graph: dict[str, set[str]]) -> list[list[str]]:
     def visit(module: str) -> None:
         if module in visiting:
             start = path.index(module)
-            cycles.append(path[start:] + [module])
+            cycles.append([*path[start:], module])
             return
         if module in visited:
             return

@@ -32,6 +32,7 @@ from theme_scheduler.core import AutoResultKind, RunIntent
 from theme_scheduler.initial_setup import (
     create_initial_setup_marker,
 )
+from theme_scheduler.log_policy import LogEvent
 from theme_scheduler.persistence import atomic_write_json, load_json_object
 from theme_scheduler.state import AppState, StateStore
 from theme_scheduler.storage import UserDataLayout
@@ -130,7 +131,7 @@ class MemoryLog:
         self.fail = fail
         self.events = []
 
-    def append(self, event) -> None:
+    def append(self, event: LogEvent) -> None:
         if self.fail:
             raise OSError("log failed")
         self.events.append(event)

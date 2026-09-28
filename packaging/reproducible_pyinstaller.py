@@ -3,9 +3,20 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Any
+from typing import Any, Protocol
 
 BaseModuleEntry = tuple[str, str, str]
+
+
+class BaseLibraryZipWriter(Protocol):
+    """Describe PyInstaller's dynamically re-exported ZIP writer."""
+
+    def __call__(
+        self,
+        filename: str,
+        modules_toc: Iterable[BaseModuleEntry],
+        code_cache: Any = None,
+    ) -> None: ...
 
 
 def sorted_base_library_modules(
@@ -25,7 +36,7 @@ def enable_reproducible_base_library() -> None:
     """
     from PyInstaller.building import build_main
 
-    original = build_main.create_base_library_zip
+    original: BaseLibraryZipWriter = vars(build_main)["create_base_library_zip"]
     if getattr(original, "_themescheduler_deterministic", False):
         return
 
@@ -40,5 +51,5 @@ def enable_reproducible_base_library() -> None:
             code_cache,
         )
 
-    create_base_library_zip._themescheduler_deterministic = True  # type: ignore[attr-defined]
-    build_main.create_base_library_zip = create_base_library_zip
+    create_base_library_zip._themescheduler_deterministic = True
+    build_main.__dict__["create_base_library_zip"] = create_base_library_zip

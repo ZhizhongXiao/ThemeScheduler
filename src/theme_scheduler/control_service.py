@@ -16,7 +16,7 @@ from .control import (
 )
 from .core import Clock, ExecutionLock, SystemClock
 from .errors import ThemeSchedulerRuntimeError
-from .log_policy import EventLogWriter, LogEvent
+from .log_policy import EventLogSink, EventLogWriter, LogEvent
 from .state import AppState, StateStore
 from .storage import UserDataLayout
 
@@ -65,7 +65,7 @@ class ControlService:
         execution_lock: ExecutionLock,
         *,
         state_store: StateStore | None = None,
-        event_log: EventLogWriter | None = None,
+        event_log: EventLogSink | None = None,
         clock: Clock | None = None,
     ) -> None:
         self.layout = layout

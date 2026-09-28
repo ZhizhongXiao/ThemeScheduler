@@ -93,6 +93,9 @@ class MemoryTaskBackend:
         self.task = task
         self.register_count = 0
 
+    def current_user_id(self) -> str:
+        return USER_ID
+
     def read(self, task_path: str) -> TaskSpec | None:
         if self.task is None or self.task.task_path != task_path:
             return None
@@ -130,6 +133,7 @@ class FakeNotifier:
         self.raise_on_prepare = raise_on_prepare
         self.prepares = []
         self.statuses = []
+        self.prepare_clears = 0
 
     def _delivery(self) -> NotificationDelivery:
         if self.fail:
@@ -152,6 +156,10 @@ class FakeNotifier:
 
     def send_status(self, request):
         self.statuses.append(request)
+        return self._delivery()
+
+    def clear_prepare(self):
+        self.prepare_clears += 1
         return self._delivery()
 
 
@@ -299,7 +307,10 @@ class ScheduledAutoTests(unittest.TestCase):
             self.assertIs(outcome.result, ScheduledRunKind.PREPARED)
             self.assertEqual(int(outcome.exit_code), 0)
             pending = PendingSwitchStore(layout.pending_switch).load()
-            self.assertEqual(pending.prepared_at.microsecond, 0)
+            assert pending is not None
+            prepared_at = pending.prepared_at
+            assert prepared_at is not None
+            self.assertEqual(prepared_at.microsecond, 0)
             self.assertEqual(pending.updated_at.microsecond, 0)
             self.assertEqual(len(notifier.prepares), 1)
 
@@ -420,9 +431,11 @@ class ScheduledAutoTests(unittest.TestCase):
             self.assertIs(outcome.result, ScheduledRunKind.CORE)
             self.assertEqual(core.calls, 1)
             self.assertFalse(layout.pending_switch.exists())
+            assert tasks.task is not None
             self.assertEqual(len(tasks.task.triggers), 4)
             self.assertEqual(sleeps, [5.0])
             self.assertEqual(len(notifier.statuses), 1)
+            self.assertEqual(notifier.prepare_clears, 1)
 
     def test_skip_consumes_state_without_running_core(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -447,12 +460,19 @@ class ScheduledAutoTests(unittest.TestCase):
             )
             PendingSwitchStore(layout.pending_switch).create(pending)
             core = StubCore()
+            notifier = FakeNotifier()
 
-            outcome = self._coordinator(layout, scheduled, core=core).run()
+            outcome = self._coordinator(
+                layout,
+                scheduled,
+                core=core,
+                notifier=notifier,
+            ).run()
 
             self.assertIs(outcome.result, ScheduledRunKind.SKIPPED)
             self.assertEqual(core.calls, 0)
             self.assertFalse(layout.pending_switch.exists())
+            self.assertEqual(notifier.prepare_clears, 1)
 
     def test_missed_prepare_after_boundary_runs_core_without_stale_notice(
         self,
@@ -511,6 +531,7 @@ class ScheduledAutoTests(unittest.TestCase):
             self.assertIs(outcome.result, ScheduledRunKind.PREPARED)
             self.assertEqual(core.calls, 0)
             self.assertTrue(layout.pending_switch.exists())
+            assert outcome.notification is not None
             self.assertIs(
                 outcome.notification.result,
                 NotificationDeliveryResult.FAILED,
@@ -538,6 +559,8 @@ class ScheduledAutoTests(unittest.TestCase):
                 notifier=notifier,
             ).run()
 
+            assert first.notification is not None
+            assert second.notification is not None
             self.assertIs(
                 first.notification.result,
                 NotificationDeliveryResult.SENT,

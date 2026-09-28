@@ -198,18 +198,18 @@ def build_plan(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
     }
 
     build_root = artifacts / "build"
-    for child in _children(build_root):
-        entries.append(
-            _entry(
-                child,
-                project_root,
-                action="delete",
-                category="superseded-build",
-                reason=(
-                    "Intermediate build superseded by a protected versioned release."
-                ),
-            )
+    entries.extend(
+        _entry(
+            child,
+            project_root,
+            action="delete",
+            category="superseded-build",
+            reason=(
+                "Intermediate build superseded by a protected versioned release."
+            ),
         )
+        for child in _children(build_root)
+    )
 
     releases_root = artifacts / "releases"
     for child in _children(releases_root):
@@ -422,17 +422,17 @@ def build_plan(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
             )
         )
 
-    for child in _children(artifacts):
-        if child.name not in known_top_level:
-            entries.append(
-                _entry(
-                    child,
-                    project_root,
-                    action="review",
-                    category="unknown-top-level",
-                    reason="Unknown artifact entry is never deleted automatically.",
-                )
-            )
+    entries.extend(
+        _entry(
+            child,
+            project_root,
+            action="review",
+            category="unknown-top-level",
+            reason="Unknown artifact entry is never deleted automatically.",
+        )
+        for child in _children(artifacts)
+        if child.name not in known_top_level
+    )
 
     entries.sort(key=lambda item: str(item["path"]).casefold())
     _assert_non_overlapping_delete_entries(entries)

@@ -12,6 +12,7 @@ from tests.fixtures.theme_files import (
 )
 from theme_scheduler.accent_theme import (
     LiveThemeApplyError,
+    ManagedTheme,
     ThemeFileError,
     apply_and_verify_theme_v2,
     build_managed_theme,
@@ -155,7 +156,7 @@ class ManagedThemeFileTests(unittest.TestCase):
 class ManagedThemeApplyTests(unittest.TestCase):
     def _fixture(
         self, root: Path
-    ) -> tuple[Path, Path, object, ScriptedThemeApplyV2Backend]:
+    ) -> tuple[Path, Path, ManagedTheme, ScriptedThemeApplyV2Backend]:
         backup = root / "before.theme"
         target = root / "managed.theme"
         backup.write_bytes(theme_bytes())

@@ -251,6 +251,7 @@ class WindowsShortcutIntegrationTests(unittest.TestCase):
         actual = self.backend.read(self.path)
 
         self.assertEqual(actual, self.shortcut)
+        assert actual is not None
         self.assertEqual(
             actual.app_user_model_id,
             "ThemeScheduler.ThemeScheduler",

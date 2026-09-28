@@ -79,8 +79,10 @@ class WindowsNotificationBackendTests(unittest.TestCase):
         self.assertIs(delivery.result, NotificationDeliveryResult.SENT)
         self.assertEqual(
             set(captured),
-            {"appUserModelId", "title", "body", "buttons"},
+            {"appUserModelId", "title", "body", "buttons", "tag", "group"},
         )
+        self.assertEqual(captured["tag"], "prepare")
+        self.assertEqual(captured["group"], "schedule")
         self.assertEqual(len(captured["buttons"]), 3)
         self.assertNotIn("targetProfile", captured)
         self.assertNotIn("scheduledAt", captured)
@@ -104,11 +106,32 @@ class WindowsNotificationBackendTests(unittest.TestCase):
         self.assertIs(sent.result, NotificationDeliveryResult.SENT)
         self.assertEqual(requests[0]["buttons"], [])
         self.assertNotIn("launch", requests[0])
+        self.assertNotIn("tag", requests[0])
+        self.assertNotIn("group", requests[0])
 
         run.side_effect = subprocess.TimeoutExpired([], 15)
         failed = self.backend.send_status(request)
         self.assertIs(failed.result, NotificationDeliveryResult.FAILED)
         self.assertFalse(failed.fallback_logged)
+
+    @patch("theme_scheduler.notifications_windows.subprocess.run")
+    def test_prepare_history_removal_is_request_free_and_hidden(self, run) -> None:
+        run.return_value = completed(
+            "RemovePrepare",
+            removed=True,
+            notificationSent=False,
+        )
+
+        delivery = self.backend.clear_prepare()
+
+        self.assertIs(delivery.result, NotificationDeliveryResult.SENT)
+        command = run.call_args.args[0]
+        self.assertEqual(command[command.index("-Action") + 1], "RemovePrepare")
+        self.assertNotIn("-RequestPath", command)
+        self.assertEqual(
+            run.call_args.kwargs["creationflags"],
+            subprocess.CREATE_NO_WINDOW,
+        )
 
     @patch("theme_scheduler.notifications_windows.subprocess.run")
     def test_error_toast_launches_only_fixed_health_endpoint(self, run) -> None:
@@ -174,6 +197,8 @@ class WindowsNotificationBackendTests(unittest.TestCase):
         self.assertIn('activationType="protocol" launch="', script)
         self.assertIn('activationType="protocol"', script)
         self.assertIn("CreateToastNotifier", script)
+        self.assertIn("ToastNotificationManager]::History", script)
+        self.assertIn("$history.Remove", script)
         self.assertNotIn("CoRegisterClassObject", script)
 
 

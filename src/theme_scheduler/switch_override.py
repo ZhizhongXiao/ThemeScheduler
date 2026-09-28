@@ -24,13 +24,13 @@ class SwitchOverrideError(DataError):
     """Raised when pending-switch state or a requested transition is invalid."""
 
 
-class SwitchDecision(str, Enum):
+class SwitchDecision(str, Enum):  # noqa: UP042 - Preserve str(Enum) output pending a dedicated migration.
     PENDING = "pending"
     CONFIRMED = "confirmed"
     SKIPPED = "skipped"
 
 
-class ExecutionDecision(str, Enum):
+class ExecutionDecision(str, Enum):  # noqa: UP042 - Preserve str(Enum) output pending a dedicated migration.
     WAIT = "wait"
     APPLY = "apply"
     SKIP = "skip"

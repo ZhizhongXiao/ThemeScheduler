@@ -47,7 +47,7 @@ class AutoFailureMixin(AutoRunnerBindings):
     def _best_effort_failure_log(
         self, transaction: AutoTransaction, result: AutoResultKind
     ) -> None:
-        try:
+        try:  # noqa: SIM105 - Failure logging must not mask the original failure.
             self._append_event(
                 timestamp=captured_at(),
                 level=(

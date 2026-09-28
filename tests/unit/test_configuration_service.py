@@ -81,6 +81,9 @@ class MemoryBackend:
         self.delete_keeps_task = delete_keeps_task
         self.register_count = 0
 
+    def current_user_id(self) -> str:
+        return USER_ID
+
     def read(self, task_path: str) -> TaskSpec | None:
         if self.task is None or self.task.task_path != task_path:
             return None
@@ -182,7 +185,7 @@ class ConfigurationServiceTests(unittest.TestCase):
             backend,
             executable=EXECUTABLE,
             user_id=USER_ID,
-            event_log=log or MemoryLog(),  # type: ignore[arg-type]
+            event_log=log or MemoryLog(),
             clock=FakeClock(),
         )
 
@@ -315,7 +318,7 @@ class ConfigurationServiceTests(unittest.TestCase):
             MemoryBackend(),
             executable=EXECUTABLE,
             user_id=USER_ID,
-            event_log=MemoryLog(),  # type: ignore[arg-type]
+            event_log=MemoryLog(),
             clock=FakeClock(),
             profile_stores=stores,
         )
@@ -350,7 +353,7 @@ class ConfigurationServiceTests(unittest.TestCase):
             MemoryBackend(),
             executable=EXECUTABLE,
             user_id=USER_ID,
-            event_log=MemoryLog(),  # type: ignore[arg-type]
+            event_log=MemoryLog(),
             clock=FakeClock(),
             profile_stores=stores,
         )
@@ -380,7 +383,7 @@ class ConfigurationServiceTests(unittest.TestCase):
             executable=EXECUTABLE,
             user_id=USER_ID,
             config_store=FailingSaveConfigStore(self.layout.config),
-            event_log=MemoryLog(),  # type: ignore[arg-type]
+            event_log=MemoryLog(),
             clock=FakeClock(),
         )
 
@@ -415,7 +418,7 @@ class ConfigurationServiceTests(unittest.TestCase):
             MemoryBackend(register_error=True),
             executable=EXECUTABLE,
             user_id=USER_ID,
-            event_log=MemoryLog(),  # type: ignore[arg-type]
+            event_log=MemoryLog(),
             clock=FakeClock(),
             profile_stores=stores,
         )

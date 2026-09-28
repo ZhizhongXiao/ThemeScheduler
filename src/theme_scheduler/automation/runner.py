@@ -35,7 +35,7 @@ from ..core import (
     plan_auto_run,
 )
 from ..initial_setup import initial_setup_pending
-from ..log_policy import EventLogWriter, LogEvent
+from ..log_policy import EventLogSink, EventLogWriter, LogEvent
 from ..persistence import captured_at
 from ..runtime_retention import (
     execute_runtime_cleanup,
@@ -83,7 +83,7 @@ class AutoRunner(AutoFailureMixin, AutoRecoveryMixin):
         clock: Clock | None = None,
         config_store: ConfigStore | None = None,
         state_store: StateStore | None = None,
-        event_log: EventLogWriter | None = None,
+        event_log: EventLogSink | None = None,
         cleanup_callback: CleanupCallback | None = None,
         intent: RunIntent = RunIntent.AUTOMATIC,
     ) -> None:
@@ -250,7 +250,7 @@ class AutoRunner(AutoFailureMixin, AutoRecoveryMixin):
             return _TrustedRun(now, timestamp, plan, state)
         except Exception as exc:
             message = f"Automatic data is untrusted: {type(exc).__name__}: {exc}"
-            try:
+            try:  # noqa: SIM105 - Best-effort diagnostics must not mask this outcome.
                 self._append_event(
                     timestamp=timestamp,
                     level="ERROR",
@@ -333,7 +333,7 @@ class AutoRunner(AutoFailureMixin, AutoRecoveryMixin):
             message = (
                 f"Required accent profile is untrusted: {type(exc).__name__}: {exc}"
             )
-            try:
+            try:  # noqa: SIM105 - Best-effort diagnostics must not mask this outcome.
                 self._append_event(
                     timestamp=trusted.timestamp,
                     level="ERROR",
@@ -365,7 +365,7 @@ class AutoRunner(AutoFailureMixin, AutoRecoveryMixin):
                 f"Automatic Windows capability probe failed: "
                 f"{type(exc).__name__}: {exc}"
             )
-            try:
+            try:  # noqa: SIM105 - Best-effort diagnostics must not mask this outcome.
                 self._append_event(
                     timestamp=trusted.timestamp,
                     level="ERROR",

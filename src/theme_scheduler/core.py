@@ -33,7 +33,7 @@ class AutoExitCode(IntEnum):
     FATAL_FAILURE = 50
 
 
-class AutoResultKind(str, Enum):
+class AutoResultKind(str, Enum):  # noqa: UP042 - Preserve str(Enum) output pending a dedicated migration.
     """Machine-readable result names independent from translated messages."""
 
     APPLIED = "applied"
@@ -79,13 +79,13 @@ class ExecutionLock(Protocol):
     def release(self) -> None: ...
 
 
-class AutoPlanKind(str, Enum):
+class AutoPlanKind(str, Enum):  # noqa: UP042 - Preserve str(Enum) output pending a dedicated migration.
     PAUSED = "paused"
     NO_CHANGE = "no-change"
     APPLY = "apply"
 
 
-class RunIntent(str, Enum):
+class RunIntent(str, Enum):  # noqa: UP042 - Preserve str(Enum) output pending a dedicated migration.
     """Distinguish scheduled decisions from an explicit user application."""
 
     AUTOMATIC = "automatic"

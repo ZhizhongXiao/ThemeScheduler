@@ -15,7 +15,7 @@ import sys
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from ..core import mutex_name_for_data_root
 from ..execution_lock import WindowsNamedMutexLock
@@ -61,9 +61,27 @@ from ..uninstall_windows import (
 
 Notifier = Callable[[str, str], None]
 ChoiceProvider = Callable[[], UninstallOptions | None]
+
+
+class UninstallStager(Protocol):
+    def stage(self, options: UninstallOptions) -> Mapping[str, Any]: ...
+
+
+class UninstallOutcomeView(Protocol):
+    result: str
+    journal_path: Path
+    message: str
+
+    def as_dict(self) -> Mapping[str, Any]: ...
+
+
+class UninstallServiceRunner(Protocol):
+    def run(self) -> UninstallOutcomeView: ...
+
+
 StagerFactory = Callable[
     [InstallLayout, Path],
-    IndependentUninstallerStager,
+    UninstallStager,
 ]
 LauncherWaiter = Callable[[int, int], bool]
 
@@ -156,8 +174,8 @@ def _native_choice_provider() -> UninstallOptions | None:
     appearance = user32.MessageBoxW(
         None,
         (
-            "是否恢复 ThemeScheduler 接管前的应用模式和强调色？\n\n"
-            "“是”：恢复安装前外观；“否”：保持当前外观。"
+            "是否恢复 ThemeScheduler 接管前的应用模式和强调色？\n\n"  # noqa: RUF001 - Preserve native Chinese UI punctuation.
+            "“是”：恢复安装前外观；“否”：保持当前外观。"  # noqa: RUF001 - Preserve native Chinese UI punctuation.
         ),
         "ThemeScheduler 卸载程序 · 外观",
         MB_YESNOCANCEL | MB_ICONQUESTION,
@@ -168,7 +186,7 @@ def _native_choice_provider() -> UninstallOptions | None:
         raise WindowsUninstallError("Appearance dialog returned no choice.")
     keep_config = user32.MessageBoxW(
         None,
-        ("是否保留配置、暂停状态、昼夜应用模式和颜色记录，供以后重新安装？"),
+        ("是否保留配置、暂停状态、昼夜应用模式和颜色记录，供以后重新安装？"),  # noqa: RUF001 - Preserve native Chinese UI punctuation.
         "ThemeScheduler 卸载程序 · 配置",
         MB_YESNOCANCEL | MB_ICONQUESTION,
     )
@@ -178,7 +196,7 @@ def _native_choice_provider() -> UninstallOptions | None:
         raise WindowsUninstallError("Configuration dialog returned no choice.")
     keep_logs = user32.MessageBoxW(
         None,
-        "是否保留 ThemeScheduler 日志？",
+        "是否保留 ThemeScheduler 日志？",  # noqa: RUF001 - Preserve native Chinese UI punctuation.
         "ThemeScheduler 卸载程序 · 日志",
         MB_YESNOCANCEL | MB_ICONQUESTION,
     )
@@ -193,11 +211,11 @@ def _native_choice_provider() -> UninstallOptions | None:
     )
     summary = (
         "即将卸载 ThemeScheduler。\n\n"
-        f"外观：{'恢复安装前外观' if options.appearance is AppearanceChoice.RESTORE else '保持当前外观'}\n"
-        f"配置与颜色：{'保留' if options.keep_config_and_profiles else '删除'}\n"
-        f"日志：{'保留' if options.keep_logs else '删除'}\n\n"
+        f"外观：{'恢复安装前外观' if options.appearance is AppearanceChoice.RESTORE else '保持当前外观'}\n"  # noqa: RUF001 - Preserve native Chinese UI punctuation.
+        f"配置与颜色：{'保留' if options.keep_config_and_profiles else '删除'}\n"  # noqa: RUF001 - Preserve native Chinese UI punctuation.
+        f"日志：{'保留' if options.keep_logs else '删除'}\n\n"  # noqa: RUF001 - Preserve native Chinese UI punctuation.
         "任务、快捷方式、安装登记、程序文件、运行缓存和 WebView2 "
-        "缓存将始终删除。是否继续？"
+        "缓存将始终删除。是否继续？"  # noqa: RUF001 - Preserve native Chinese UI punctuation.
     )
     confirmed = user32.MessageBoxW(
         None,
@@ -394,10 +412,7 @@ def main(
     choice_provider: ChoiceProvider | None = None,
     stager_factory: StagerFactory | None = None,
     current_executable: Path | None = None,
-    service_factory: Callable[
-        [UninstallRequest, Path],
-        IndependentUninstallService,
-    ]
+    service_factory: Callable[[UninstallRequest, Path], UninstallServiceRunner]
     | None = None,
     launcher_waiter: LauncherWaiter | None = None,
 ) -> int:
@@ -535,9 +550,9 @@ def main(
             "ThemeScheduler 卸载未完整完成",
             (
                 f"{outcome.message}\n\n"
-                f"事务证据：{outcome.journal_path}\n"
+                f"事务证据：{outcome.journal_path}\n"  # noqa: RUF001 - Preserve native Chinese UI punctuation.
                 "请在 15 分钟内双击同一临时目录中的 "
-                "Uninstall.exe 重试，或重新运行安装器修复。"
+                "Uninstall.exe 重试，或重新运行安装器修复。"  # noqa: RUF001 - Preserve native Chinese UI punctuation.
             ),
         )
         return 2
@@ -554,7 +569,7 @@ def main(
         if not arguments or (arguments and arguments[0] == "execute"):
             notify(
                 "ThemeScheduler 卸载程序",
-                f"无法安全继续：{message}",
+                f"无法安全继续：{message}",  # noqa: RUF001 - Preserve native Chinese UI punctuation.
             )
         return 2
 

@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('Probe', 'Send')]
+    [ValidateSet('Probe', 'Send', 'RemovePrepare')]
     [string]$Action,
 
     [string]$RequestPath
@@ -13,6 +13,8 @@ $ErrorActionPreference = 'Stop'
 $FrozenAumid = 'ThemeScheduler.ThemeScheduler'
 $FrozenScheme = 'themescheduler-action'
 $FrozenHealthUri = 'themescheduler-action://health/'
+$FrozenPrepareTag = 'prepare'
+$FrozenPrepareGroup = 'schedule'
 
 function Write-BridgeResult {
     param([hashtable]$Payload)
@@ -63,6 +65,22 @@ if ($Action -eq 'Probe') {
         ok = $true
         action = 'Probe'
         available = $true
+        notificationSent = $false
+    }
+    exit 0
+}
+
+if ($Action -eq 'RemovePrepare') {
+    $history = [Windows.UI.Notifications.ToastNotificationManager]::History
+    $history.Remove(
+        $FrozenPrepareTag,
+        $FrozenPrepareGroup,
+        $FrozenAumid
+    )
+    Write-BridgeResult @{
+        ok = $true
+        action = 'RemovePrepare'
+        removed = $true
         notificationSent = $false
     }
     exit 0
@@ -131,6 +149,16 @@ $toastXml = (
 $document = [Windows.Data.Xml.Dom.XmlDocument]::new()
 $document.LoadXml($toastXml)
 $toast = [Windows.UI.Notifications.ToastNotification]::new($document)
+if ($null -ne $request.tag -or $null -ne $request.group) {
+    if (
+        [string]$request.tag -ne $FrozenPrepareTag -or
+        [string]$request.group -ne $FrozenPrepareGroup
+    ) {
+        throw 'Notification tag or group is not an allowed product value.'
+    }
+    $toast.Tag = $FrozenPrepareTag
+    $toast.Group = $FrozenPrepareGroup
+}
 $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier(
     $FrozenAumid
 )

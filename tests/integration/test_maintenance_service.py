@@ -141,13 +141,13 @@ class FakeAppearanceApplier:
             raise self.error
         transaction = layout.runtime / "accent-test-maintenance"
         transaction.mkdir(parents=True, exist_ok=True)
-        before = {
+        before: dict[str, str | int] = {
             "autoColorization": "1",
             "colorizationColor": "0XC4FFB900",
             "appMode": "Dark",
             "systemMode": "Dark",
         }
-        target = {
+        target: dict[str, str | int] = {
             "autoColorization": "0",
             "colorizationColor": backup.colorization_color,
             "appMode": backup.app_mode,
@@ -155,7 +155,7 @@ class FakeAppearanceApplier:
                 backup.system_mode if backup.appearance_registry is not None else "Dark"
             ),
         }
-        actual = dict(target)
+        actual: dict[str, str | int] = dict(target)
         if not self.preserve_system:
             actual["systemMode"] = "Light"
         return AccentApplyOutcome(

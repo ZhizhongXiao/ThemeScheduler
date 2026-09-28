@@ -29,9 +29,11 @@ class SharedErrorHierarchyTests(unittest.TestCase):
             tree = ast.parse(path.read_text(encoding="utf-8"))
             module_tail = path.relative_to(SOURCE_ROOT).with_suffix("")
             module_name = ".".join(module_tail.parts)
-            for node in tree.body:
-                if isinstance(node, ast.ClassDef) and node.name.endswith("Error"):
-                    discovered.append((module_name, node.name))
+            discovered.extend(
+                (module_name, node.name)
+                for node in tree.body
+                if isinstance(node, ast.ClassDef) and node.name.endswith("Error")
+            )
 
         self.assertGreater(len(discovered), 30)
         for module_name, class_name in discovered:

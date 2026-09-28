@@ -55,6 +55,9 @@ class MemoryBackend:
         self.register_count = 0
         self.delete_count = 0
 
+    def current_user_id(self) -> str:
+        return USER_ID
+
     def read(self, task_path: str) -> TaskSpec | None:
         if self.task is None or self.task.task_path != task_path:
             return None
@@ -117,11 +120,15 @@ class TaskContractTests(unittest.TestCase):
                 NIGHT_TRIGGER_ID,
             },
         )
+        daily_triggers = [
+            trigger for trigger in task.triggers if isinstance(trigger, DailyTrigger)
+        ]
+        self.assertEqual(len(daily_triggers), len(task.triggers))
         self.assertEqual(
-            {trigger.local_time for trigger in task.triggers},
+            {trigger.local_time for trigger in daily_triggers},
             {"06:10", "06:15", "23:40", "23:45"},
         )
-        self.assertTrue(all(trigger.days_interval == 1 for trigger in task.triggers))
+        self.assertTrue(all(trigger.days_interval == 1 for trigger in daily_triggers))
         self.assertEqual(task.action.arguments, "auto")
         self.assertEqual(
             task.action.working_directory,
@@ -302,7 +309,7 @@ class TaskMutationTests(unittest.TestCase):
             if task == desired:
                 backend.readback_override = mismatch
 
-        backend.register = register_with_mismatch  # type: ignore[method-assign]
+        backend.register = register_with_mismatch
 
         with self.assertRaises(SchedulerMutationError) as caught:
             reconcile_task(backend, desired)
@@ -357,9 +364,17 @@ class TaskMutationTests(unittest.TestCase):
 
         reconcile_task(backend, after)
 
-        self.assertEqual(compare_task_specs(after, backend.task), ())
+        repaired = backend.task
+        assert repaired is not None
+        self.assertEqual(compare_task_specs(after, repaired), ())
+        daily_triggers = [
+            trigger
+            for trigger in repaired.triggers
+            if isinstance(trigger, DailyTrigger)
+        ]
+        self.assertEqual(len(daily_triggers), len(repaired.triggers))
         self.assertEqual(
-            {trigger.local_time for trigger in backend.task.triggers},
+            {trigger.local_time for trigger in daily_triggers},
             {"08:05", "08:10", "21:15", "21:20"},
         )
 

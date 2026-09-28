@@ -23,7 +23,7 @@ def _launch_setup_window(
         return 2
     entry = resource_path("ui", "html", "setup.html")
     if not entry.is_file():
-        show_native_webview2_error(f"安装界面资源缺失：{entry}")
+        show_native_webview2_error(f"安装界面资源缺失：{entry}")  # noqa: RUF001 - Preserve native Chinese UI punctuation.
         return 2
 
     # Delayed import keeps the native dependency error path independent.

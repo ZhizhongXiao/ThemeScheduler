@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .core import Clock, ExecutionLock, SystemClock
-from .log_policy import EventLogWriter, LogEvent
+from .log_policy import EventLogSink, EventLogWriter, LogEvent
 from .protocol_registration import (
     NotificationProtocolBackend,
     ProtocolRegistration,
@@ -64,7 +64,7 @@ class NotificationIdentityRepairService:
         shortcut_plan: ShortcutPlan,
         protocol: NotificationProtocolBackend,
         *,
-        event_log: EventLogWriter | None = None,
+        event_log: EventLogSink | None = None,
         clock: Clock | None = None,
     ) -> None:
         self.layout = layout

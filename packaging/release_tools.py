@@ -742,4 +742,4 @@ def distribution_readme(*, version: str, setup_sha256: str) -> str:
 - 强调色应用依赖经目标 Windows 11 验证但未公开的主题管理接口；可见
   Shell 未同步时，维护区提供需用户确认的 Explorer 故障恢复。
 - 不提供后台自动更新；升级或修复由用户重新运行 Setup。
-"""
+"""  # noqa: RUF001 - preserve Chinese punctuation in the generated Chinese README.

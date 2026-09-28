@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from .errors import DataError
 
@@ -171,6 +171,12 @@ class LogEvent:
             ),
             rollback_succeeded=(payload["rollbackSucceeded"] if version == 2 else None),
         )
+
+
+class EventLogSink(Protocol):
+    """Append an event; in-memory sinks need not return a file path."""
+
+    def append(self, event: LogEvent) -> Path | None: ...
 
 
 class EventLogWriter:

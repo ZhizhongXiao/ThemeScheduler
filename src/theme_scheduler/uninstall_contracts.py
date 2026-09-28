@@ -38,7 +38,7 @@ class UninstallContractError(ContractError):
     """Raised when an uninstall request or journal is untrusted."""
 
 
-class AppearanceChoice(str, Enum):
+class AppearanceChoice(str, Enum):  # noqa: UP042 - Preserve str(Enum) output pending a dedicated migration.
     KEEP = "keep-current-appearance"
     RESTORE = "restore-pre-install-app-mode-and-accent"
 
@@ -399,7 +399,7 @@ class UninstallJournal:
         index = len(self.completed_steps)
         if index >= len(UNINSTALL_STEPS) or UNINSTALL_STEPS[index] != step:
             raise UninstallContractError("Uninstall step is out of order.")
-        completed = self.completed_steps + (step,)
+        completed = (*self.completed_steps, step)
         target_status = "completed" if completed == UNINSTALL_STEPS else status
         return replace(
             self,

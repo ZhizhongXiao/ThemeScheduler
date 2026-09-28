@@ -44,8 +44,11 @@ class WindowsProtocolRegistrationTests(unittest.TestCase):
         self.backend.write(self.registration)
 
         self.assertEqual(self.backend.read(), self.registration)
+        captured = self.backend.capture()
+        self.assertIsNotNone(captured)
+        assert captured is not None
         self.assertEqual(
-            set(self.backend.capture().keys),
+            set(captured.keys),
             {
                 "",
                 "DefaultIcon",

@@ -15,7 +15,7 @@ HEALTH_REPORT_SCHEMA_VERSION = 1
 _IDENTIFIER_PATTERN = re.compile(r"[a-z0-9]+(?:[.-][a-z0-9]+)*")
 
 
-class HealthCategory(str, Enum):
+class HealthCategory(str, Enum):  # noqa: UP042 - Preserve str(Enum) output pending a dedicated migration.
     CONFIGURATION = "configuration"
     DATA = "data"
     FILES = "files"
@@ -25,7 +25,7 @@ class HealthCategory(str, Enum):
     NOTIFICATION = "notification"
 
 
-class HealthStatus(str, Enum):
+class HealthStatus(str, Enum):  # noqa: UP042 - Preserve str(Enum) output pending a dedicated migration.
     HEALTHY = "healthy"
     WARNING = "warning"
     REPAIRABLE = "repairable"

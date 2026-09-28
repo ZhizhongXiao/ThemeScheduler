@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import os
 import threading
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from .resources import resource_path
 from .uninstall_gui_api import UninstallGuiApi
@@ -18,6 +19,13 @@ _EXECUTE_EXIT_GRACE_SECONDS = 0.75
 _EXECUTE_EXIT_SIGNAL = "exit-requested"
 
 
+class ExecuteExitGuardApi(Protocol):
+    @property
+    def runtime(self) -> object: ...
+
+    def bind_close_guard(self, callback: Callable[[], None]) -> None: ...
+
+
 class _ExecuteExitGuard:
     """Schedule one hard-exit fallback for the temporary execute process."""
 
@@ -28,7 +36,7 @@ class _ExecuteExitGuard:
     def __call__(self) -> None:
         if self._scheduled.is_set():
             return
-        try:
+        try:  # noqa: SIM105 - Staged cleanup can proceed if the final exit signal cannot be written.
             self._exit_signal.write_text(
                 f"{os.getpid()}\n",
                 encoding="ascii",
@@ -51,7 +59,7 @@ class _ExecuteExitGuard:
 
 def _bind_execute_exit_guard(
     window: Any,
-    api: UninstallGuiApi,
+    api: ExecuteExitGuardApi,
 ) -> _ExecuteExitGuard | None:
     """Bind the hard-exit fallback only to the temporary execute window."""
 
@@ -95,7 +103,7 @@ def launch_uninstall_window(
         return 2
     entry = resource_path("ui", "html", "uninstall.html")
     if not entry.is_file():
-        show_native_webview2_error(f"卸载界面资源缺失：{entry}")
+        show_native_webview2_error(f"卸载界面资源缺失：{entry}")  # noqa: RUF001 - Preserve native Chinese UI punctuation.
         return 2
 
     import webview

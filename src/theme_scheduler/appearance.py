@@ -28,7 +28,7 @@ COLORIZATION_COLOR_VALUE = "ColorizationColor"
 REG_DWORD = 4
 
 
-class ThemeMode(str, Enum):
+class ThemeMode(str, Enum):  # noqa: UP042 - Preserve str(Enum) output pending a dedicated migration.
     DARK = "dark"
     LIGHT = "light"
 

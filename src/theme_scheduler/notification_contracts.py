@@ -13,16 +13,18 @@ NOTIFICATION_PROTOCOL_SCHEME = "themescheduler-action"
 NOTIFICATION_TITLE = "ThemeScheduler"
 NOTIFICATION_KIND = "themescheduler.notification"
 NOTIFICATION_SCHEMA_VERSION = 1
+PREPARE_TOAST_TAG = "prepare"
+PREPARE_TOAST_GROUP = "schedule"
 
 _TOKEN_PATTERN = re.compile(r"[a-z0-9]+(?:[.-][a-z0-9]+)*")
 
 
-class NotificationCategory(str, Enum):
+class NotificationCategory(str, Enum):  # noqa: UP042 - Preserve str(Enum) output pending a dedicated migration.
     ERROR = "error"
     STATUS = "status"
 
 
-class NotificationDeliveryResult(str, Enum):
+class NotificationDeliveryResult(str, Enum):  # noqa: UP042 - Preserve str(Enum) output pending a dedicated migration.
     SENT = "sent"
     SUPPRESSED = "suppressed"
     FAILED = "failed"

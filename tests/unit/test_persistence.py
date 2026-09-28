@@ -194,7 +194,10 @@ class PersistenceTests(unittest.TestCase):
             real_replace = os.replace
             calls = 0
 
-            def fail_target_replace(source: object, destination: object) -> None:
+            def fail_target_replace(
+                source: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+                destination: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+            ) -> None:
                 nonlocal calls
                 calls += 1
                 if calls == 2:

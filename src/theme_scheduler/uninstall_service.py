@@ -13,12 +13,9 @@ from typing import Any, Protocol
 
 from .core import Clock, ExecutionLock, SystemClock
 from .errors import ThemeSchedulerRuntimeError
-from .protocol_registration import NotificationProtocolBackend
-from .scheduler import DEFAULT_TASK_PATH, TaskSchedulerBackend
-from .system_integration import (
-    InstalledAppRegistryBackend,
-    ShortcutBackend,
-)
+from .protocol_registration import RegistryTreeBackup
+from .scheduler import DEFAULT_TASK_PATH
+from .system_integration import RegistryKeyBackup
 from .uninstall_contracts import (
     AppearanceChoice,
     UninstallContractError,
@@ -30,6 +27,30 @@ from .uninstall_contracts import (
 )
 
 _REPARSE_POINT_ATTRIBUTE = 0x400
+
+
+class UninstallTaskBackend(Protocol):
+    def read(self, task_path: str) -> object | None: ...
+
+    def delete(self, task_path: str) -> None: ...
+
+
+class UninstallRegistryBackend(Protocol):
+    def capture(self) -> object | None: ...
+
+    def restore(self, backup: RegistryKeyBackup | None) -> None: ...
+
+
+class UninstallShortcutBackend(Protocol):
+    def capture(self, path: Path) -> object | None: ...
+
+    def restore(self, path: Path, backup: None) -> None: ...
+
+
+class UninstallProtocolBackend(Protocol):
+    def capture(self) -> object | None: ...
+
+    def restore(self, backup: RegistryTreeBackup | None) -> None: ...
 
 
 def lifecycle_mutex_name_for_program_root(program_root: Path) -> str:
@@ -295,12 +316,12 @@ class IndependentUninstallService:
         workspace: Path,
         lifecycle_lock: ExecutionLock,
         auto_lock: ExecutionLock,
-        registry: InstalledAppRegistryBackend,
-        shortcuts: ShortcutBackend,
-        tasks: TaskSchedulerBackend,
+        registry: UninstallRegistryBackend,
+        shortcuts: UninstallShortcutBackend,
+        tasks: UninstallTaskBackend,
         shortcut_paths: tuple[Path, ...],
         *,
-        protocol: NotificationProtocolBackend | None = None,
+        protocol: UninstallProtocolBackend | None = None,
         appearance_restorer: AppearanceRestorer | None = None,
         process_guard: InstalledProcessGuard | None = None,
         file_cleaner: StrictUninstallFileCleaner | None = None,

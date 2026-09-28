@@ -64,6 +64,9 @@ class MemoryTasks:
         self.task = task
         self.fail = fail
 
+    def current_user_id(self) -> str:
+        return USER_ID
+
     def read(self, task_path: str):
         return self.task if self.task.task_path == task_path else None
 

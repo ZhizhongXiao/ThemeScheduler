@@ -16,6 +16,7 @@ from .contracts import (
     LockFactory,
     MaintenanceServiceFactory,
     ManualAppearanceServiceFactory,
+    ShellOpener,
 )
 from .maintenance import GuiMaintenanceMixin
 from .overview import GuiOverviewMixin
@@ -31,7 +32,7 @@ class GuiApi(
 ):
     """The only object exposed to JavaScript by pywebview."""
 
-    _CONFIG_FIELDS = {
+    _CONFIG_FIELDS = frozenset({
         "dayStart",
         "nightStart",
         "dayAppsTheme",
@@ -44,11 +45,11 @@ class GuiApi(
         "nightTitleBordersAccent",
         "notifyErrors",
         "notifyStatusChanges",
-    }
-    _WORKSPACE_FIELDS = _CONFIG_FIELDS | {
+    })
+    _WORKSPACE_FIELDS = _CONFIG_FIELDS | frozenset({
         "dayColor",
         "nightColor",
-    }
+    })
 
     def __init__(
         self,
@@ -64,7 +65,7 @@ class GuiApi(
             ManualAppearanceServiceFactory | None
         ) = None,
         current_appearance_reader: CurrentAppearanceReader | None = None,
-        shell_actions: ShellActions | None = None,
+        shell_actions: ShellOpener | None = None,
         clock: Clock | None = None,
         allow_live_writes: bool = False,
     ) -> None:

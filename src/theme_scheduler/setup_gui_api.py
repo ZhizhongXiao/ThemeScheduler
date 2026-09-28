@@ -81,14 +81,14 @@ class SetupGuiApi:
         return {
             "ok": True,
             "allowed": allowed,
-            "reason": ("" if allowed else "安装或回滚正在进行，完成前不能关闭窗口。"),
+            "reason": ("" if allowed else "安装或回滚正在进行，完成前不能关闭窗口。"),  # noqa: RUF001 - Preserve native Chinese UI punctuation.
         }
 
     def close_window(self) -> dict[str, bool | str]:
         if not self.window_close_allowed():
             return {
                 "ok": False,
-                "error": "安装或回滚正在进行，完成前不能关闭窗口。",
+                "error": "安装或回滚正在进行，完成前不能关闭窗口。",  # noqa: RUF001 - Preserve native Chinese UI punctuation.
             }
         callback = self._close_window
         if callback is None:
@@ -128,7 +128,7 @@ class SetupGuiApi:
         if open_app and not succeeded:
             return {
                 "ok": False,
-                "error": "安装未成功验证，不能启动已安装程序。",
+                "error": "安装未成功验证，不能启动已安装程序。",  # noqa: RUF001 - Preserve native Chinese UI punctuation.
             }
         try:
             if open_app:

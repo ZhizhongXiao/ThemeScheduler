@@ -408,7 +408,7 @@ class InstallBackupContractTests(unittest.TestCase):
                 created_by_version="0.1.0",
                 windows_build="26200",
                 theme_backend=ThemeBackend(source),  # type: ignore[arg-type]
-                app_backend=AppBackend(),  # type: ignore[arg-type]
+                app_backend=AppBackend(),
                 colorization_reader=lambda: 0xC4FFB900,
                 timestamp="2026-07-25T12:00:00+08:00",
             )
@@ -423,7 +423,7 @@ class InstallBackupContractTests(unittest.TestCase):
                     created_by_version="0.1.0",
                     windows_build="26200",
                     theme_backend=ThemeBackend(source),  # type: ignore[arg-type]
-                    app_backend=AppBackend(),  # type: ignore[arg-type]
+                    app_backend=AppBackend(),
                     colorization_reader=lambda: 0xC4FFB900,
                     timestamp="2026-07-25T12:01:00+08:00",
                 )
@@ -457,7 +457,7 @@ class InstallBackupContractTests(unittest.TestCase):
                 created_by_version="0.1.0",
                 windows_build="26200",
                 theme_backend=ThemeBackend(source),  # type: ignore[arg-type]
-                app_backend=AppBackend(),  # type: ignore[arg-type]
+                app_backend=AppBackend(),
                 colorization_reader=lambda: 0xC4744DA9,
                 timestamp="2026-07-25T12:00:00+08:00",
             )
@@ -598,7 +598,7 @@ class InstallBackupContractTests(unittest.TestCase):
                     created_by_version="0.1.0",
                     windows_build="26200",
                     theme_backend=ThemeBackend(source),  # type: ignore[arg-type]
-                    app_backend=AppBackend(),  # type: ignore[arg-type]
+                    app_backend=AppBackend(),
                     colorization_reader=lambda: next(colors),
                     timestamp="2026-07-25T12:00:00+08:00",
                 )

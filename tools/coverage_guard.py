@@ -118,14 +118,11 @@ def compare_snapshots(
     current_files = current.get("files")
     baseline_totals = baseline.get("totals")
     current_totals = current.get("totals")
-    if not all(
-        isinstance(value, dict)
-        for value in (
-            baseline_files,
-            current_files,
-            baseline_totals,
-            current_totals,
-        )
+    if (
+        not isinstance(baseline_files, dict)
+        or not isinstance(current_files, dict)
+        or not isinstance(baseline_totals, dict)
+        or not isinstance(current_totals, dict)
     ):
         raise ValueError("Coverage baseline or current snapshot is incomplete.")
 

@@ -19,6 +19,7 @@ from theme_scheduler.notification_contracts import (
 )
 from theme_scheduler.protocol_registration import (
     ProtocolRegistration,
+    RegistryTreeBackup,
 )
 from theme_scheduler.scheduler import (
     TaskDefinitionBackup,
@@ -44,6 +45,9 @@ class FixedClock:
 class MemoryTask:
     def __init__(self, task: TaskSpec | None) -> None:
         self.task = task
+
+    def current_user_id(self) -> str:
+        return USER_ID
 
     def read(self, task_path: str):
         if self.task is None or self.task.task_path != task_path:
@@ -90,11 +94,13 @@ class MemoryShortcuts:
 
 
 class MemoryProtocol:
+    BACKUP = RegistryTreeBackup(("",), (("", "", "drift", 1),))
+
     def __init__(self, registration: ProtocolRegistration | None) -> None:
         self.registration = registration
 
     def capture(self):
-        return object() if self.registration is not None else None
+        return self.BACKUP if self.registration is not None else None
 
     def read(self):
         return self.registration

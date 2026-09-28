@@ -9,7 +9,7 @@ from typing import Any
 
 from .config import ConfigStore
 from .core import AutoExitCode, Clock, ExecutionLock, SystemClock
-from .log_policy import EventLogWriter, LogEvent
+from .log_policy import EventLogSink, EventLogWriter, LogEvent
 from .notification_protocol import (
     NotificationAction,
     parse_action_uri,
@@ -20,7 +20,7 @@ from .storage import UserDataLayout
 from .switch_override import PendingSwitchStore
 
 
-class NotificationActionResult(str, Enum):
+class NotificationActionResult(str, Enum):  # noqa: UP042 - Preserve str(Enum) output pending a dedicated migration.
     CONFIRMED = "confirmed"
     SKIPPED = "skipped"
     DELAYED = "delayed"
@@ -87,7 +87,7 @@ class NotificationActionService:
         config_store: ConfigStore | None = None,
         state_store: StateStore | None = None,
         pending_store: PendingSwitchStore | None = None,
-        event_log: EventLogWriter | None = None,
+        event_log: EventLogSink | None = None,
     ) -> None:
         self.layout = layout
         self.execution_lock = execution_lock

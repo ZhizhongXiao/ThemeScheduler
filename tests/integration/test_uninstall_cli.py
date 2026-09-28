@@ -8,7 +8,6 @@ import unittest
 from contextlib import redirect_stdout
 from datetime import datetime, timedelta
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import patch
 
 from theme_scheduler.cli.uninstall import (
@@ -155,13 +154,21 @@ class IndependentUninstallerShellTests(unittest.TestCase):
     def test_stage_without_confirmation_stops_before_factory(self) -> None:
         called = []
 
+        class Stager:
+            def stage(self, options):
+                return {}
+
+        def stager_factory(layout, executable):
+            called.append(True)
+            return Stager()
+
         result = uninstall_main(
             [
                 "stage",
                 "--appearance",
                 AppearanceChoice.KEEP.value,
             ],
-            stager_factory=lambda layout, executable: called.append(True),
+            stager_factory=stager_factory,
         )
 
         self.assertEqual(result, 3)
@@ -206,15 +213,20 @@ class IndependentUninstallerShellTests(unittest.TestCase):
             calls = []
             notices = []
 
+            class Outcome:
+                result = "completed"
+                journal_path = Path("journal.json")
+                message = "completed"
+
+                def as_dict(self) -> dict[str, object]:
+                    return {
+                        "result": "completed",
+                        "verified": True,
+                    }
+
             class Service:
-                def run(self):
-                    return SimpleNamespace(
-                        result="completed",
-                        as_dict=lambda: {
-                            "result": "completed",
-                            "verified": True,
-                        },
-                    )
+                def run(self) -> Outcome:
+                    return Outcome()
 
             blocked_calls = []
             with (

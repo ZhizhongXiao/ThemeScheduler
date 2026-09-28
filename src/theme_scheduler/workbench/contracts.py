@@ -19,14 +19,32 @@ from ..accent_profile import RgbColor
 from ..appearance import CurrentWindowsAppearance
 from ..config import AppConfig
 from ..core import Clock, ExecutionLock
-from ..health_service import HealthService
-from ..maintenance_service import MaintenanceService
-from ..manual_appearance_service import ManualAppearanceService
-from ..notification_identity_service import (
-    NotificationIdentityRepairService,
-)
 from ..scheduler import TaskSchedulerBackend
 from ..storage import UserDataLayout
+
+
+class StructuredOutcome(Protocol):
+    def as_dict(self) -> dict[str, object]: ...
+
+
+class MaintenanceServiceLike(Protocol):
+    def restore_install_appearance(self) -> StructuredOutcome: ...
+
+
+class HealthReportLike(Protocol):
+    def as_dict(self) -> HealthReportData: ...
+
+
+class HealthServiceLike(Protocol):
+    def inspect(self) -> HealthReportLike: ...
+
+
+class IdentityRepairServiceLike(Protocol):
+    def repair(self) -> StructuredOutcome: ...
+
+
+class ManualAppearanceServiceLike(Protocol):
+    def apply_current(self) -> StructuredOutcome: ...
 
 
 class LockFactory(Protocol):
@@ -34,19 +52,19 @@ class LockFactory(Protocol):
 
 
 class MaintenanceServiceFactory(Protocol):
-    def __call__(self) -> MaintenanceService: ...
+    def __call__(self) -> MaintenanceServiceLike: ...
 
 
 class HealthServiceFactory(Protocol):
-    def __call__(self) -> HealthService: ...
+    def __call__(self) -> HealthServiceLike: ...
 
 
 class IdentityRepairServiceFactory(Protocol):
-    def __call__(self) -> NotificationIdentityRepairService: ...
+    def __call__(self) -> IdentityRepairServiceLike: ...
 
 
 class ManualAppearanceServiceFactory(Protocol):
-    def __call__(self) -> ManualAppearanceService: ...
+    def __call__(self) -> ManualAppearanceServiceLike: ...
 
 
 class CurrentAppearanceReader(Protocol):
@@ -140,8 +158,21 @@ class HealthCheckSummary(TypedDict):
     repairAction: str | None
 
 
-class HealthResult(OperationResult, total=False):
+class HealthReportData(TypedDict):
+    kind: str
+    schemaVersion: int
+    capturedAt: str
     status: str
+    summary: dict[str, int]
+    checks: list[HealthCheckSummary]
+
+
+class HealthResult(OperationResult, total=False):
+    kind: str
+    schemaVersion: int
+    capturedAt: str
+    status: str
+    summary: dict[str, int]
     checks: list[HealthCheckSummary]
 
 
@@ -200,8 +231,8 @@ class WorkbenchBindings:
     _clock: Clock
     _allow_live_writes: bool
     _api_lock: RLock
-    _CONFIG_FIELDS: ClassVar[set[str]]
-    _WORKSPACE_FIELDS: ClassVar[set[str]]
+    _CONFIG_FIELDS: ClassVar[frozenset[str]]
+    _WORKSPACE_FIELDS: ClassVar[frozenset[str]]
 
     @staticmethod
     def _error(action: str, exc: Exception) -> dict[str, Any]:

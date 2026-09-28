@@ -24,6 +24,16 @@ from tools.test import (
 )
 
 
+def _flatten_suite(suite: unittest.TestSuite) -> list[unittest.TestCase]:
+    tests: list[unittest.TestCase] = []
+    for item in suite:
+        if isinstance(item, unittest.TestSuite):
+            tests.extend(_flatten_suite(item))
+        else:
+            tests.append(item)
+    return tests
+
+
 class LayeredTestRunnerTests(unittest.TestCase):
     def test_discovery_roots_are_the_three_scoped_test_packages(self) -> None:
         self.assertEqual(
@@ -100,7 +110,7 @@ class LayeredTestRunnerTests(unittest.TestCase):
 
     def test_overlapping_patterns_are_deduplicated(self) -> None:
         suite = build_suite(("test_setup*.py", "test_setup_gui.py"))
-        identities = [test.id() for test in suite]
+        identities = [test.id() for test in _flatten_suite(suite)]
         self.assertEqual(len(identities), len(set(identities)))
         self.assertGreater(len(identities), 0)
 

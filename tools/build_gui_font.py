@@ -58,9 +58,10 @@ def build_subset(
     output: Path,
 ) -> None:
     options = subset.Options()
-    options.name_IDs = ["*"]
+    # fontTools accepts "*" here, though its type stub only declares integer IDs.
+    options.__dict__["name_IDs"] = ["*"]
     options.name_legacy = True
-    options.name_languages = ["*"]
+    options.__dict__["name_languages"] = ["*"]
     options.notdef_glyph = True
     options.notdef_outline = True
     options.recommended_glyphs = True

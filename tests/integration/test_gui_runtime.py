@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from typing import ClassVar
 from unittest.mock import Mock, patch
 
 from theme_scheduler.gui import launch_gui
@@ -30,7 +31,7 @@ class _Window:
 
 
 class _Activation:
-    instances: list[_Activation] = []
+    instances: ClassVar[list[_Activation]] = []
 
     def __init__(self, event_name: str) -> None:
         self.event_name = event_name
@@ -106,7 +107,9 @@ class GuiRuntimeRiskTests(unittest.TestCase):
             self.assertEqual(launch_gui(data_root=root, installed=False), 0)
 
         self.assertEqual(window.calls[0:2], [("restore", None), ("show", None)])
-        self.assertIn("themeSchedulerOpenHealth", window.calls[2][1])
+        script = window.calls[2][1]
+        assert script is not None
+        self.assertIn("themeSchedulerOpenHealth", script)
         self.assertEqual(
             _Activation.instances[0].event_name, gui_activation_event_name(root)
         )

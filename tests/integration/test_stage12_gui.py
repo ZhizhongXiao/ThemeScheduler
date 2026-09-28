@@ -350,7 +350,7 @@ class Stage12FrontendContractTests(unittest.TestCase):
         self.assertIn("fromHex", self.color_fields)
         self.assertIn("fromHexInput", self.color_fields)
         self.assertIn("fromChannels", self.color_fields)
-        self.assertIn("0–255", self.color_fields)
+        self.assertIn("0–255", self.color_fields)  # noqa: RUF001 - Preserve the displayed numeric range.
         self.assertIn("data-color-preview", self.html)
         self.assertNotIn("data-color-preview-value", self.html)
         self.assertNotIn("previewValue", self.color_fields)
@@ -369,6 +369,7 @@ class Stage12FrontendContractTests(unittest.TestCase):
             flags=re.DOTALL,
         )
         self.assertIsNotNone(available_rule)
+        assert available_rule is not None
         self.assertIn("background-image: none", available_rule.group("body"))
         unavailable_rule = re.search(
             r"\.color-preview-panel\.is-unavailable\s*\{(?P<body>.*?)\}",
@@ -376,6 +377,7 @@ class Stage12FrontendContractTests(unittest.TestCase):
             flags=re.DOTALL,
         )
         self.assertIsNotNone(unavailable_rule)
+        assert unavailable_rule is not None
         self.assertIn(
             "repeating-linear-gradient",
             unavailable_rule.group("body"),
@@ -490,7 +492,7 @@ class Stage12FrontendContractTests(unittest.TestCase):
         ]
         self.assertNotIn("dataRoot", summary_source)
         self.assertNotIn("executable", summary_source)
-        self.assertIn("核心状态：读取失败", summary_source)
+        self.assertIn("核心状态：读取失败", summary_source)  # noqa: RUF001 - Match exact localized copy.
         self.assertIn('data.message || "后端未返回可用状态"', summary_source)
 
     def test_mutating_identity_repair_is_conditional_maintenance_action(self) -> None:
@@ -533,7 +535,7 @@ class Stage12FrontendContractTests(unittest.TestCase):
             'toast.classList.remove("is-visible", "is-centered")',
             self.app,
         )
-        self.assertNotIn("诊断摘要已复制；未包含完整路径或原始 JSON。", self.app)
+        self.assertNotIn("诊断摘要已复制；未包含完整路径或原始 JSON。", self.app)  # noqa: RUF001 - Match exact localized copy.
         self.assertNotIn('lang="en"', self.html)
 
     @unittest.skipUnless(shutil.which("node"), "Node.js is not installed")

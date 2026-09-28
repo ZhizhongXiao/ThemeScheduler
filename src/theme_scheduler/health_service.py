@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable
 from datetime import datetime
+from typing import Protocol
 from uuid import uuid4
 
 from .accent_profile import AccentProfileStore
@@ -25,7 +26,7 @@ from .protocol_registration import (
     NotificationProtocolBackend,
     ProtocolRegistration,
 )
-from .scheduler import TaskSchedulerBackend, build_task_spec, inspect_task
+from .scheduler import TaskSpec, build_task_spec, inspect_task
 from .state import StateStore
 from .storage import UserDataLayout
 from .switch_override import PendingSwitch, PendingSwitchStore
@@ -36,6 +37,10 @@ CapabilityProbe = Callable[[], None]
 IdentityReader = Callable[[], str]
 
 
+class TaskReader(Protocol):
+    def read(self, task_path: str) -> TaskSpec | None: ...
+
+
 class HealthService:
     """Inspect trusted product state without silently repairing it."""
 
@@ -43,7 +48,7 @@ class HealthService:
         self,
         layout: UserDataLayout,
         install_layout: InstallLayout,
-        scheduler: TaskSchedulerBackend,
+        scheduler: TaskReader,
         shortcuts: ShortcutBackend,
         shortcut_plan: ShortcutPlan,
         protocol: NotificationProtocolBackend,

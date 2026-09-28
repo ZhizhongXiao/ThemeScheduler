@@ -100,7 +100,7 @@ def report_progress(
 ) -> None:
     if reporter is None:
         return
-    try:
+    try:  # noqa: SIM105 - Progress reporting must never replace an installation outcome.
         reporter(stage)
     except Exception:
         # Presentation progress must never become an installation failure.
