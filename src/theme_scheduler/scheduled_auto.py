@@ -13,6 +13,7 @@ from .accent_profile import AccentProfileStore
 from .automation import AutoRunOutcome
 from .config import AppConfig, ConfigStore
 from .core import AutoExitCode, AutoResultKind, Clock, ExecutionLock, SystemClock
+from .execution_lock import WindowsNamedMutexLock, named_mutex_name_for_path
 from .log_policy import EventLogSink, EventLogWriter, LogEvent
 from .notification_contracts import (
     NotificationDelivery,
@@ -173,6 +174,7 @@ class ScheduledAutoCoordinator:
         pending_store: PendingSwitchStore | None = None,
         event_log: EventLogSink | None = None,
         dedup_store: NotificationDedupStore | None = None,
+        notification_lock: ExecutionLock | None = None,
         sleeper: Callable[[float], None] = sleep,
     ) -> None:
         self.layout = layout
@@ -189,6 +191,17 @@ class ScheduledAutoCoordinator:
         self.event_log = event_log or EventLogWriter(layout.event_log)
         self.dedup_store = dedup_store or NotificationDedupStore(
             layout.notification_dedup
+        )
+        self.notification_lock = (
+            notification_lock
+            if notification_lock is not None
+            else WindowsNamedMutexLock(
+                named_mutex_name_for_path(
+                    layout.notification_dedup,
+                    purpose="NotificationDedup",
+                ),
+                wait_timeout_ms=30_000,
+            )
         )
         self.sleeper = sleeper
 
@@ -371,6 +384,29 @@ class ScheduledAutoCoordinator:
         if outcome.core is None:
             return outcome
         try:
+            if not self.notification_lock.acquire():
+                raise TimeoutError("Notification dedup lock timed out.")
+            try:
+                return self._send_error_notification_locked(outcome)
+            finally:
+                self.notification_lock.release()
+        except Exception as exc:
+            self._log_notification_failure_safely(
+                target=outcome.target_profile,
+                message=(
+                    "Error notification coordination failed: "
+                    f"{type(exc).__name__}: {exc}"
+                ),
+            )
+            return outcome
+
+    def _send_error_notification_locked(
+        self,
+        outcome: ScheduledRunOutcome,
+    ) -> ScheduledRunOutcome:
+        if outcome.core is None:
+            return outcome
+        try:
             config = self.config_store.load()
             if not config.notify_errors:
                 return outcome
@@ -407,7 +443,7 @@ class ScheduledAutoCoordinator:
             self._log_notification_failure_safely(
                 target=outcome.target_profile,
                 message=(
-                    "Error notification coordination failed: "
+                    "Error notification state or delivery failed: "
                     f"{type(exc).__name__}: {exc}"
                 ),
             )

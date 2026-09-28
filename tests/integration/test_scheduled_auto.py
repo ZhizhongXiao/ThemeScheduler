@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+import threading
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -12,7 +13,7 @@ from theme_scheduler.accent_profile import (
 )
 from theme_scheduler.automation import AutoRunOutcome
 from theme_scheduler.config import AppConfig, ConfigStore
-from theme_scheduler.core import AutoResultKind
+from theme_scheduler.core import AutoResultKind, ExecutionLock
 from theme_scheduler.notification_contracts import (
     NotificationDelivery,
     NotificationDeliveryResult,
@@ -66,6 +67,32 @@ class FakeLock:
 
     def release(self) -> None:
         self.released += 1
+
+
+class SharedNotificationLock:
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._guard = threading.Lock()
+        self.acquire_count = 0
+        self.second_acquire_started = threading.Event()
+
+    def acquire(self) -> bool:
+        with self._guard:
+            self.acquire_count += 1
+            if self.acquire_count == 2:
+                self.second_acquire_started.set()
+        return self._lock.acquire()
+
+    def release(self) -> None:
+        self._lock.release()
+
+
+class FailingNotificationLock:
+    def acquire(self) -> bool:
+        raise OSError("injected notification lock failure")
+
+    def release(self) -> None:
+        raise AssertionError("release must not run before successful acquire")
 
 
 class StubCore:
@@ -163,6 +190,20 @@ class FakeNotifier:
         return self._delivery()
 
 
+class PausingNotifier(FakeNotifier):
+    def __init__(self) -> None:
+        super().__init__()
+        self.send_entered = threading.Event()
+        self.allow_send_to_finish = threading.Event()
+
+    def send_status(self, request):
+        self.statuses.append(request)
+        self.send_entered.set()
+        if not self.allow_send_to_finish.wait(timeout=10):
+            raise TimeoutError("test did not release paused notifier")
+        return self._delivery()
+
+
 class MemoryLog:
     def __init__(self) -> None:
         self.events = []
@@ -224,6 +265,7 @@ class ScheduledAutoTests(unittest.TestCase):
         tasks: MemoryTaskBackend | None = None,
         notifier: FakeNotifier | None = None,
         log: MemoryLog | None = None,
+        notification_lock: ExecutionLock | None = None,
         sleeps: list[float] | None = None,
     ) -> ScheduledAutoCoordinator:
         config = ConfigStore(layout.config).load()
@@ -245,6 +287,7 @@ class ScheduledAutoTests(unittest.TestCase):
             user_id=USER_ID,
             clock=clock,
             event_log=log or MemoryLog(),
+            notification_lock=notification_lock,
             sleeper=(
                 (lambda seconds: sleeps.append(seconds))
                 if sleeps is not None
@@ -570,6 +613,147 @@ class ScheduledAutoTests(unittest.TestCase):
                 NotificationDeliveryResult.SUPPRESSED,
             )
             self.assertEqual(len(notifier.statuses), 1)
+
+    def test_concurrent_matching_failures_send_only_one_error_notification(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            layout = self._layout(Path(raw))
+            notifier = PausingNotifier()
+            lock = SharedNotificationLock()
+            now = datetime(2026, 7, 26, 6, 16, tzinfo=UTC8)
+            outcomes = []
+            failures = []
+
+            def run_one() -> None:
+                try:
+                    outcomes.append(
+                        self._coordinator(
+                            layout,
+                            now,
+                            core=StubCore(AutoResultKind.PARTIAL_FAILURE),
+                            notifier=notifier,
+                            notification_lock=lock,
+                        ).run()
+                    )
+                except Exception as exc:
+                    failures.append(exc)
+
+            first = threading.Thread(target=run_one)
+            second = threading.Thread(target=run_one)
+            first.start()
+            self.assertTrue(notifier.send_entered.wait(timeout=10))
+            second.start()
+            self.assertTrue(lock.second_acquire_started.wait(timeout=10))
+            notifier.allow_send_to_finish.set()
+            first.join(timeout=10)
+            second.join(timeout=10)
+
+            self.assertFalse(first.is_alive())
+            self.assertFalse(second.is_alive())
+            self.assertEqual(failures, [])
+            self.assertEqual(len(outcomes), 2)
+            self.assertTrue(all(item.core is not None for item in outcomes))
+            results = {
+                item.notification.result
+                for item in outcomes
+                if item.notification is not None
+            }
+            self.assertEqual(
+                results,
+                {
+                    NotificationDeliveryResult.SENT,
+                    NotificationDeliveryResult.SUPPRESSED,
+                },
+            )
+            self.assertEqual(len(notifier.statuses), 1)
+            self.assertEqual(len(self._load_dedup(layout).entries), 1)
+
+    def test_concurrent_distinct_failures_keep_both_dedup_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            layout = self._layout(Path(raw))
+            notifier = PausingNotifier()
+            lock = SharedNotificationLock()
+            now = datetime(2026, 7, 26, 6, 16, tzinfo=UTC8)
+            results = []
+            failures = []
+
+            def run_one(kind: AutoResultKind) -> None:
+                try:
+                    results.append(
+                        self._coordinator(
+                            layout,
+                            now,
+                            core=StubCore(kind),
+                            notifier=notifier,
+                            notification_lock=lock,
+                        ).run()
+                    )
+                except Exception as exc:
+                    failures.append(exc)
+
+            first = threading.Thread(
+                target=run_one,
+                args=(AutoResultKind.PARTIAL_FAILURE,),
+            )
+            second = threading.Thread(
+                target=run_one,
+                args=(AutoResultKind.DATA_UNTRUSTED,),
+            )
+            first.start()
+            self.assertTrue(notifier.send_entered.wait(timeout=10))
+            second.start()
+            self.assertTrue(lock.second_acquire_started.wait(timeout=10))
+            notifier.allow_send_to_finish.set()
+            first.join(timeout=10)
+            second.join(timeout=10)
+
+            self.assertFalse(first.is_alive())
+            self.assertFalse(second.is_alive())
+            self.assertEqual(failures, [])
+            self.assertEqual(len(results), 2)
+            self.assertTrue(
+                all(
+                    item.notification is not None
+                    and item.notification.result is NotificationDeliveryResult.SENT
+                    for item in results
+                )
+            )
+            self.assertEqual(len(notifier.statuses), 2)
+            self.assertEqual(
+                {key for key, _instant in self._load_dedup(layout).entries},
+                {
+                    "auto.failed|partial-failure",
+                    "auto.failed|data-untrusted",
+                },
+            )
+
+    def test_notification_lock_failure_preserves_core_outcome(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            layout = self._layout(Path(raw))
+            core = StubCore(AutoResultKind.PARTIAL_FAILURE)
+
+            outcome = self._coordinator(
+                layout,
+                datetime(2026, 7, 26, 6, 16, tzinfo=UTC8),
+                core=core,
+                notifier=FakeNotifier(),
+                notification_lock=FailingNotificationLock(),
+            ).run()
+
+            self.assertIs(outcome.result, ScheduledRunKind.CORE)
+            self.assertIsNotNone(outcome.core)
+            assert outcome.core is not None
+            self.assertIs(outcome.core.result, AutoResultKind.PARTIAL_FAILURE)
+            self.assertEqual(outcome.exit_code, outcome.core.exit_code)
+            self.assertEqual(core.calls, 1)
+            self.assertIsNone(outcome.notification)
+
+    @staticmethod
+    def _load_dedup(layout: UserDataLayout):
+        from theme_scheduler.notification_dedup import NotificationDedupStore
+
+        return NotificationDedupStore(layout.notification_dedup).load()
 
 
 if __name__ == "__main__":
