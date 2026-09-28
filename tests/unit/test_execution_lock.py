@@ -1,8 +1,15 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
-from theme_scheduler.execution_lock import WindowsNamedMutexLock
+from theme_scheduler.execution_lock import (
+    WAIT_ABANDONED,
+    WAIT_OBJECT_0,
+    WAIT_TIMEOUT,
+    WindowsNamedMutexLock,
+    named_mutex_name_for_path,
+)
 
 
 class FakeMutexApi:
@@ -11,10 +18,15 @@ class FakeMutexApi:
         *,
         already_exists: bool = False,
         release_error: Exception | None = None,
+        wait_result: int = WAIT_OBJECT_0,
+        wait_error: Exception | None = None,
     ) -> None:
         self.already_exists = already_exists
         self.release_error = release_error
+        self.wait_result = wait_result
+        self.wait_error = wait_error
         self.created: list[str] = []
+        self.waited: list[tuple[int, int]] = []
         self.released: list[int] = []
         self.closed: list[int] = []
 
@@ -26,6 +38,12 @@ class FakeMutexApi:
         self.released.append(handle)
         if self.release_error is not None:
             raise self.release_error
+
+    def wait(self, handle: int, timeout_ms: int) -> int:
+        self.waited.append((handle, timeout_ms))
+        if self.wait_error is not None:
+            raise self.wait_error
+        return self.wait_result
 
     def close(self, handle: int) -> None:
         self.closed.append(handle)
@@ -53,6 +71,38 @@ class WindowsNamedMutexLockTests(unittest.TestCase):
         self.assertFalse(lock.acquire())
 
         self.assertEqual(api.released, [])
+        self.assertEqual(api.closed, [42])
+
+    def test_existing_mutex_waits_and_releases_after_acquiring(self) -> None:
+        api = FakeMutexApi(already_exists=True, wait_result=WAIT_ABANDONED)
+        lock = WindowsNamedMutexLock(self.NAME, api=api, wait_timeout_ms=30000)
+
+        self.assertTrue(lock.acquire())
+        self.assertEqual(api.waited, [(42, 30000)])
+        self.assertTrue(lock.acquired)
+        lock.release()
+
+        self.assertEqual(api.released, [42])
+        self.assertEqual(api.closed, [42])
+
+    def test_wait_timeout_closes_handle_without_claiming_ownership(self) -> None:
+        api = FakeMutexApi(already_exists=True, wait_result=WAIT_TIMEOUT)
+        lock = WindowsNamedMutexLock(self.NAME, api=api, wait_timeout_ms=10)
+
+        self.assertFalse(lock.acquire())
+
+        self.assertFalse(lock.acquired)
+        self.assertEqual(api.released, [])
+        self.assertEqual(api.closed, [42])
+
+    def test_wait_failure_closes_handle_and_propagates(self) -> None:
+        api = FakeMutexApi(already_exists=True, wait_error=OSError("wait failed"))
+        lock = WindowsNamedMutexLock(self.NAME, api=api, wait_timeout_ms=10)
+
+        with self.assertRaisesRegex(OSError, "wait failed"):
+            lock.acquire()
+
+        self.assertFalse(lock.acquired)
         self.assertEqual(api.closed, [42])
 
     def test_release_error_still_closes_handle(self) -> None:
@@ -86,6 +136,15 @@ class WindowsNamedMutexLockTests(unittest.TestCase):
             ).name,
             lifecycle,
         )
+        for purpose in ("NotificationDedup", "EventLog"):
+            name = named_mutex_name_for_path(Path("data"), purpose=purpose)
+            self.assertTrue(name.startswith(f"Local\\ThemeScheduler.{purpose}."))
+            self.assertEqual(
+                WindowsNamedMutexLock(name, api=FakeMutexApi()).name,
+                name,
+            )
+        with self.assertRaisesRegex(ValueError, "purpose"):
+            named_mutex_name_for_path(Path("data"), purpose="unapproved")
         with self.assertRaisesRegex(ValueError, "scope"):
             WindowsNamedMutexLock(
                 r"Global\ThemeScheduler.Auto.invalid", api=FakeMutexApi()

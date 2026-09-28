@@ -7,7 +7,6 @@ Windows adapters.
 
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass
 from datetime import datetime, time
 from enum import Enum, IntEnum
@@ -15,6 +14,7 @@ from pathlib import Path
 from typing import Protocol
 
 from .config import AppConfig
+from .execution_lock import named_mutex_name_for_path
 from .state import AppState
 
 PROFILE_DAY = "day"
@@ -202,6 +202,4 @@ def plan_auto_run(
 def mutex_name_for_data_root(data_root: Path) -> str:
     """Derive a non-sensitive per-data-root name in the current session."""
 
-    normalized = str(Path(data_root).resolve()).replace("/", "\\").casefold()
-    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:24]
-    return f"Local\\ThemeScheduler.Auto.{digest}"
+    return named_mutex_name_for_path(data_root, purpose="Auto")
