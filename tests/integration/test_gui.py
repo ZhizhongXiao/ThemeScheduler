@@ -695,7 +695,7 @@ class GuiApiTests(unittest.TestCase):
         self.assertEqual(repaired["result"], "changed")
         self.assertEqual(self.identity_repair.calls, 1)
 
-    def test_reset_preferences_preserves_profile_modes_and_repairs_task(
+    def test_reset_preferences_preserves_complete_appearance_and_repairs_task(
         self,
     ) -> None:
         custom = AppConfig(
@@ -705,7 +705,18 @@ class GuiApiTests(unittest.TestCase):
             "light",
             False,
             False,
+            day_system_theme="dark",
+            night_system_theme="light",
+            day_start_taskbar_accent=True,
+            night_start_taskbar_accent=False,
+            day_title_borders_accent=True,
+            night_title_borders_accent=False,
         )
+        self.create_profiles()
+        profiles_before = {
+            name: AccentProfileStore(self.layout.profile_path(name), name).load()
+            for name in ("day", "night")
+        }
         ConfigStore(self.layout.config).save(custom)
         self.scheduler.task = build_task_spec(
             custom,
@@ -723,6 +734,19 @@ class GuiApiTests(unittest.TestCase):
         self.assertTrue(actual.notify_status_changes)
         self.assertEqual(actual.day_apps_theme, "dark")
         self.assertEqual(actual.night_apps_theme, "light")
+        self.assertEqual(actual.day_system_theme, "dark")
+        self.assertEqual(actual.night_system_theme, "light")
+        self.assertTrue(actual.day_start_taskbar_accent)
+        self.assertFalse(actual.night_start_taskbar_accent)
+        self.assertTrue(actual.day_title_borders_accent)
+        self.assertFalse(actual.night_title_borders_accent)
+        self.assertEqual(
+            {
+                name: AccentProfileStore(self.layout.profile_path(name), name).load()
+                for name in ("day", "night")
+            },
+            profiles_before,
+        )
         self.assertEqual(
             {item.local_time for item in self.scheduler.task.triggers},  # type: ignore[union-attr]
             {"06:10", "06:15", "23:40", "23:45"},

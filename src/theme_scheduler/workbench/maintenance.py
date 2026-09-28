@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 from ..config import AppConfig, ConfigStore
@@ -177,13 +178,12 @@ class GuiMaintenanceMixin(WorkbenchBindings):
             try:
                 current = ConfigStore(self._layout.config).load()
                 defaults = AppConfig.defaults()
-                target = AppConfig(
+                target = replace(
+                    current,
                     day_start=defaults.day_start,
                     night_start=defaults.night_start,
-                    day_apps_theme=current.day_apps_theme,
-                    night_apps_theme=current.night_apps_theme,
                     notify_errors=defaults.notify_errors,
-                    notify_status_changes=(defaults.notify_status_changes),
+                    notify_status_changes=defaults.notify_status_changes,
                 )
                 service = ConfigurationService(
                     self._layout,
