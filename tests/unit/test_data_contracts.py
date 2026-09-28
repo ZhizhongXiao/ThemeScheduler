@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import tempfile
+import threading
 import unittest
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
@@ -40,6 +41,37 @@ from theme_scheduler.log_policy import (
     LogEventValidationError,
 )
 from theme_scheduler.persistence import atomic_write_json
+
+
+class SharedEventLogLockFactory:
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._guard = threading.Lock()
+        self.active = 0
+        self.maximum_active = 0
+
+    def __call__(self) -> SharedEventLogLock:
+        return SharedEventLogLock(self)
+
+
+class SharedEventLogLock:
+    def __init__(self, factory: SharedEventLogLockFactory) -> None:
+        self._factory = factory
+
+    def acquire(self) -> bool:
+        self._factory._lock.acquire()
+        with self._factory._guard:
+            self._factory.active += 1
+            self._factory.maximum_active = max(
+                self._factory.maximum_active,
+                self._factory.active,
+            )
+        return True
+
+    def release(self) -> None:
+        with self._factory._guard:
+            self._factory.active -= 1
+        self._factory._lock.release()
 from theme_scheduler.runtime_retention import (
     execute_runtime_cleanup,
     plan_runtime_cleanup,
@@ -721,6 +753,63 @@ class LogPolicyTests(unittest.TestCase):
                         LogEvent.from_dict(json.loads(line)).as_dict(),
                         json.loads(line),
                     )
+
+    def test_concurrent_writers_serialize_rotation_and_preserve_records(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "events.jsonl"
+            lock_factory = SharedEventLogLockFactory()
+            writers = [
+                EventLogWriter(
+                    path,
+                    max_bytes=600,
+                    backup_count=60,
+                    lock_factory=lock_factory,
+                )
+                for _ in range(8)
+            ]
+            failures: list[Exception] = []
+
+            def append_event(index: int) -> None:
+                try:
+                    writers[index % len(writers)].append(
+                        LogEvent(
+                            occurred_at=(
+                                f"2026-07-23T21:00:{index:02d}+08:00"
+                            ),
+                            level="INFO",
+                            event="state.save",
+                            result="success",
+                            trigger="manual",
+                            message=f"event-{index}",
+                        )
+                    )
+                except Exception as exc:
+                    failures.append(exc)
+
+            threads = [
+                threading.Thread(target=append_event, args=(index,))
+                for index in range(48)
+            ]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=5)
+
+            self.assertTrue(all(not thread.is_alive() for thread in threads))
+            self.assertEqual(failures, [])
+            self.assertEqual(lock_factory.maximum_active, 1)
+            files = list(path.parent.glob("events.jsonl*"))
+            self.assertGreater(len(files), 2)
+            messages = [
+                LogEvent.from_dict(json.loads(line)).message
+                for file in files
+                for line in file.read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertEqual(len(messages), 48)
+            self.assertEqual(
+                set(messages),
+                {f"event-{index}" for index in range(48)},
+            )
 
 
 class LayoutContractTests(unittest.TestCase):

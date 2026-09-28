@@ -5,13 +5,14 @@ from __future__ import annotations
 import json
 import os
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Protocol
 
 from .errors import DataError
+from .execution_lock import WindowsNamedMutexLock, named_mutex_name_for_path
 
 LOG_KIND = "themescheduler.event"
 LOG_SCHEMA_VERSION = 2
@@ -179,6 +180,12 @@ class EventLogSink(Protocol):
     def append(self, event: LogEvent) -> Path | None: ...
 
 
+class EventLogLock(Protocol):
+    def acquire(self) -> bool: ...
+
+    def release(self) -> None: ...
+
+
 class EventLogWriter:
     """Append validated JSONL events and rotate before crossing the size limit."""
 
@@ -188,6 +195,7 @@ class EventLogWriter:
         *,
         max_bytes: int = LOG_MAX_BYTES,
         backup_count: int = LOG_BACKUP_COUNT,
+        lock_factory: Callable[[], EventLogLock] | None = None,
     ) -> None:
         if max_bytes < 256:
             raise ValueError("Log max_bytes must be at least 256.")
@@ -196,6 +204,14 @@ class EventLogWriter:
         self.path = Path(path)
         self.max_bytes = max_bytes
         self.backup_count = backup_count
+        if lock_factory is None:
+            mutex_name = named_mutex_name_for_path(self.path, purpose="EventLog")
+            self.lock_factory = lambda: WindowsNamedMutexLock(
+                mutex_name,
+                wait_timeout_ms=30_000,
+            )
+        else:
+            self.lock_factory = lock_factory
 
     def _backup_path(self, index: int) -> Path:
         return self.path.with_name(f"{self.path.name}.{index}")
@@ -219,14 +235,20 @@ class EventLogWriter:
         )
         encoded = (payload + "\n").encode("utf-8")
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        if (
-            self.path.exists()
-            and self.path.stat().st_size > 0
-            and self.path.stat().st_size + len(encoded) > self.max_bytes
-        ):
-            self._rotate()
-        with self.path.open("ab") as handle:
-            handle.write(encoded)
-            handle.flush()
-            os.fsync(handle.fileno())
+        lock = self.lock_factory()
+        if not lock.acquire():
+            raise TimeoutError("Event log rotation lock timed out.")
+        try:
+            if (
+                self.path.exists()
+                and self.path.stat().st_size > 0
+                and self.path.stat().st_size + len(encoded) > self.max_bytes
+            ):
+                self._rotate()
+            with self.path.open("ab") as handle:
+                handle.write(encoded)
+                handle.flush()
+                os.fsync(handle.fileno())
+        finally:
+            lock.release()
         return self.path
