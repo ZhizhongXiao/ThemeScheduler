@@ -197,7 +197,20 @@ def migrate_json_file(
     if migrated == original:
         return migrated
     backup_path = path.with_name(f"{path.name}.v{source_version}.bak")
-    atomic_write_json(backup_path, original)
+    try:
+        atomic_write_json(backup_path, original)
+    except FileExistsError:
+        try:
+            existing_backup = load_json_object(backup_path)
+        except (OSError, JsonDocumentError) as exc:
+            raise MigrationError(
+                f"Existing migration backup cannot be verified: {backup_path}"
+            ) from exc
+        if existing_backup != original:
+            raise MigrationError(
+                f"Existing migration backup does not match the source document: "
+                f"{backup_path}"
+            ) from None
     atomic_write_json(path, migrated, force=True)
     written = load_json_object(path)
     validator(written)

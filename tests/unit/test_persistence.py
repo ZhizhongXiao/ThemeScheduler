@@ -231,6 +231,61 @@ class PersistenceTests(unittest.TestCase):
             )
             self.assertEqual(list(root.glob(".*.tmp")), [])
 
+            migrated = migrate_json_file(
+                path,
+                kind="example",
+                current_version=2,
+                migrations={
+                    1: lambda payload: {
+                        "kind": payload["kind"],
+                        "schemaVersion": 2,
+                        "new": payload["old"],
+                    }
+                },
+                validator=lambda payload: None,
+            )
+
+            self.assertEqual(
+                migrated,
+                {"kind": "example", "schemaVersion": 2, "new": 7},
+            )
+            self.assertEqual(load_json_object(path), migrated)
+            self.assertEqual(
+                load_json_object(path.with_name("config.json.v1.bak")), original
+            )
+
+    def test_migration_refuses_to_reuse_mismatched_existing_backup(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "config.json"
+            backup_path = root / "config.json.v1.bak"
+            original = {"kind": "example", "schemaVersion": 1, "old": 7}
+            conflicting_backup = {
+                "kind": "example",
+                "schemaVersion": 1,
+                "old": 99,
+            }
+            atomic_write_json(path, original)
+            atomic_write_json(backup_path, conflicting_backup)
+
+            with self.assertRaisesRegex(MigrationError, "backup"):
+                migrate_json_file(
+                    path,
+                    kind="example",
+                    current_version=2,
+                    migrations={
+                        1: lambda payload: {
+                            "kind": payload["kind"],
+                            "schemaVersion": 2,
+                            "new": payload["old"],
+                        }
+                    },
+                    validator=lambda payload: None,
+                )
+
+            self.assertEqual(load_json_object(path), original)
+            self.assertEqual(load_json_object(backup_path), conflicting_backup)
+
 
 if __name__ == "__main__":
     unittest.main()
