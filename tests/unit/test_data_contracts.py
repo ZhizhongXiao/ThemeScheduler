@@ -72,6 +72,8 @@ class SharedEventLogLock:
         with self._factory._guard:
             self._factory.active -= 1
         self._factory._lock.release()
+
+
 from theme_scheduler.runtime_retention import (
     execute_runtime_cleanup,
     plan_runtime_cleanup,
@@ -773,9 +775,7 @@ class LogPolicyTests(unittest.TestCase):
                 try:
                     writers[index % len(writers)].append(
                         LogEvent(
-                            occurred_at=(
-                                f"2026-07-23T21:00:{index:02d}+08:00"
-                            ),
+                            occurred_at=(f"2026-07-23T21:00:{index:02d}+08:00"),
                             level="INFO",
                             event="state.save",
                             result="success",
