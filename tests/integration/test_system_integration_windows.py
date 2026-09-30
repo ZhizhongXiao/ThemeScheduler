@@ -246,12 +246,29 @@ class WindowsShortcutIntegrationTests(unittest.TestCase):
     def test_real_bridge_round_trips_frozen_app_user_model_id(
         self,
     ) -> None:
+        self.layout.app.mkdir(parents=True)
+        self.layout.executable.touch()
         self.backend.write(self.shortcut)
 
         actual = self.backend.read(self.path)
 
-        self.assertEqual(actual, self.shortcut)
         assert actual is not None
+        self.assertTrue(os.path.samefile(actual.path, self.shortcut.path))
+        self.assertTrue(os.path.samefile(actual.target, self.shortcut.target))
+        self.assertEqual(actual.arguments, self.shortcut.arguments)
+        self.assertTrue(
+            os.path.samefile(
+                actual.working_directory,
+                self.shortcut.working_directory,
+            )
+        )
+        self.assertEqual(actual.description, self.shortcut.description)
+        actual_icon, actual_icon_index = actual.icon_location.rsplit(",", 1)
+        expected_icon, expected_icon_index = self.shortcut.icon_location.rsplit(
+            ",", 1
+        )
+        self.assertEqual(actual_icon_index, expected_icon_index)
+        self.assertTrue(os.path.samefile(actual_icon, expected_icon))
         self.assertEqual(
             actual.app_user_model_id,
             "ThemeScheduler.ThemeScheduler",

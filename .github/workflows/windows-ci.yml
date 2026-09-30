@@ -16,6 +16,8 @@ jobs:
     name: Windows CI
     runs-on: windows-latest
     timeout-minutes: 45
+    env:
+      PYTHONUTF8: "1"
     steps:
       - name: Check out repository
         uses: actions/checkout@v7

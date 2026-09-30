@@ -218,7 +218,7 @@ class SetupGuiApiTests(unittest.TestCase):
 
             self.assertEqual(api.open_setup_log(), {"ok": True})
             self.assertEqual(len(opened), 1)
-            self.assertEqual(opened[0].parent, Path(temporary))
+            self.assertEqual(opened[0].parent.resolve(), Path(temporary).resolve())
 
     def test_close_before_window_binding_reports_not_ready(self) -> None:
         api = SetupGuiApi(FakeRuntime())
