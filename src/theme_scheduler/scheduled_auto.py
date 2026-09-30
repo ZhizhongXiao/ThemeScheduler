@@ -642,6 +642,14 @@ class ScheduledAutoCoordinator:
         pending = context.pending
         if pending is None:
             return None
+        if (
+            pending.decision is SwitchDecision.SKIPPED
+            and context.now < pending.next_fixed_at
+        ):
+            raise SwitchOverrideError(
+                "A skipped occurrence marker cannot be cleared before its next "
+                "fixed boundary."
+            )
         try:
             cleared, repaired = self._remove_pending(pending)
         except Exception as exc:
@@ -663,7 +671,11 @@ class ScheduledAutoCoordinator:
         self,
         context: _RunContext,
     ) -> ScheduledRunOutcome | None:
-        if context.pending is None or context.config.notify_status_changes:
+        if (
+            context.pending is None
+            or context.config.notify_status_changes
+            or context.pending.decision is SwitchDecision.SKIPPED
+        ):
             return None
         return self._clear_pending(
             context,
@@ -700,8 +712,10 @@ class ScheduledAutoCoordinator:
         )
 
     def _run_paused(self, context: _RunContext) -> ScheduledRunOutcome:
-        core = self.core_runner.run_locked()
         pending = context.pending
+        if pending is not None and pending.decision is SwitchDecision.SKIPPED:
+            return self._skip_pending(context, pending)
+        core = self.core_runner.run_locked()
         if pending is not None and context.now >= pending.scheduled_at:
             failure = self._clear_pending(
                 context,
@@ -770,13 +784,7 @@ class ScheduledAutoCoordinator:
         context: _RunContext,
         pending: PendingSwitch,
     ) -> ScheduledRunOutcome:
-        failure = self._clear_pending(
-            context,
-            failure_prefix="Skipped switch cleanup failed",
-            target_profile=pending.target_profile,
-        )
-        if failure is not None:
-            return failure
+        self._clear_prepare_safely(context.now, pending.target_profile)
         return ScheduledRunOutcome(
             ScheduledRunKind.SKIPPED,
             "The user skipped this scheduled switch.",

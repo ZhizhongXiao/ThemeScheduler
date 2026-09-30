@@ -104,7 +104,7 @@ HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize
 Windows 设置 → 个性化 → 颜色
 ```
 
-手动调整保持到下一个固定计划边界。程序不实时监听、不判断修改者，也不提供长期 `manualOverride`。阶段 9 仅在预通知的五分钟决策窗口内建立受 nonce 保护的 `pending-switch` 一次性覆盖，用于跳过或延后当前这一执行点；它不能由普通手动改色自动产生，也不会跨越下一固定边界。
+手动调整保持到下一个固定计划边界。程序不实时监听、不判断修改者，也不提供长期 `manualOverride`。阶段 9 仅在预通知的五分钟决策窗口内建立受 nonce 保护的 `pending-switch` 一次性覆盖，用于跳过或延后当前这一执行点；它不能由普通手动改色自动产生，也不会跨越下一固定边界。跳过后保留 `SKIPPED` occurrence 标记至 `nextFixedAt`，防止后续重复 auto 撤销用户决定。
 
 例如：
 

@@ -213,6 +213,22 @@ def _resource_value(text: str, name: str) -> str:
     return match.group(1)
 
 
+def _fixed_file_info_version(text: str, name: str) -> tuple[int, int, int, int]:
+    match = re.search(
+        rf"\b{re.escape(name)}\s*=\s*\(\s*([0-9]+)\s*,\s*([0-9]+)\s*,\s*"
+        rf"([0-9]+)\s*,\s*([0-9]+)\s*\)",
+        text,
+    )
+    if match is None:
+        raise ValueError(f"Version resource has no valid {name} tuple.")
+    return (
+        int(match.group(1)),
+        int(match.group(2)),
+        int(match.group(3)),
+        int(match.group(4)),
+    )
+
+
 def validate_manifest_configuration(project_root: Path) -> None:
     """Reject missing or external deterministic MANIFEST inputs."""
 
@@ -250,8 +266,14 @@ def validate_release_configuration(project_root: Path, version: str) -> None:
     validate_manifest_configuration(project_root)
     if project_version(project_root) != version:
         raise ValueError("Build version does not match pyproject.toml project.version.")
+    major, minor, patch = (int(part) for part in version.split("."))
+    expected_fixed_version = (major, minor, patch, 0)
     for executable, relative in VERSION_RESOURCES.items():
         text = (project_root / relative).read_text(encoding="utf-8")
+        if _fixed_file_info_version(text, "filevers") != expected_fixed_version:
+            raise ValueError(f"{relative} numeric filevers does not match.")
+        if _fixed_file_info_version(text, "prodvers") != expected_fixed_version:
+            raise ValueError(f"{relative} numeric prodvers does not match.")
         if _resource_value(text, "FileVersion") != version:
             raise ValueError(f"{relative} FileVersion does not match.")
         if _resource_value(text, "ProductVersion") != version:

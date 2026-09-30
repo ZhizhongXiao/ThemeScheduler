@@ -107,6 +107,17 @@ class PersistenceTests(unittest.TestCase):
             self.assertEqual(path.read_bytes(), b"before")
             self.assertEqual(list(root.glob(".*.tmp")), [])
 
+    def test_atomic_bytes_validates_type_and_refuses_overwrite(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "install.theme"
+            with self.assertRaisesRegex(TypeError, "must be bytes"):
+                atomic_write_bytes(path, "not bytes")  # type: ignore[arg-type]
+
+            atomic_write_bytes(path, b"original")
+            with self.assertRaises(FileExistsError):
+                atomic_write_bytes(path, b"replacement")
+            self.assertEqual(path.read_bytes(), b"original")
+
     def test_explicit_adjacent_migration_is_validated(self) -> None:
         source = {"kind": "example", "schemaVersion": 1, "old": "value"}
 

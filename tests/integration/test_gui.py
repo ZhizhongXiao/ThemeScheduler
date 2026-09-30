@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -26,6 +27,7 @@ from theme_scheduler.auto_transaction import (
     file_sha256,
     json_document_sha256,
 )
+from theme_scheduler.backup import InstallBackup, InstallBackupStore
 from theme_scheduler.config import AppConfig, ConfigStore
 from theme_scheduler.gui import (
     frontend_entry,
@@ -476,6 +478,134 @@ class GuiApiTests(unittest.TestCase):
         )
         self.assertEqual(result["config"]["dayStart"], "06:15")
         self.assertIn("incomplete", result["message"])
+
+    def test_overview_verifies_install_backup_and_reports_tampering(self) -> None:
+        theme = (
+            b"[Theme]\r\n"
+            b"DisplayName=Install Backup\r\n"
+            b"ThemeId={65CC0448-76B8-4EB2-ADF7-D3186669AAC9}\r\n\r\n"
+            b"[VisualStyles]\r\n"
+            b"AutoColorization=0\r\n"
+            b"ColorizationColor=0XC4FFB900\r\n"
+            b"SystemMode=Dark\r\n"
+            b"AppMode=Light\r\n"
+        )
+        backup = InstallBackup(
+            captured_at="2026-07-23T21:00:00+08:00",
+            created_by_version="1.0.1",
+            windows_build="26200",
+            apps_value_exists=True,
+            apps_value_type_code=4,
+            apps_value_data=1,
+            source_theme_path=r"C:\Users\tester\AppData\Local\Themes\Custom.theme",
+            theme_sha256=hashlib.sha256(theme).hexdigest(),
+            auto_colorization=False,
+            colorization_color="0XC4FFB900",
+            app_mode="Light",
+            system_mode="Dark",
+        )
+        store = InstallBackupStore(
+            self.layout.install_backup_manifest,
+            self.layout.install_backup_theme,
+        )
+        store.create(backup, theme)
+
+        valid = self.api.get_overview()
+        self.assertEqual(valid["installBackup"]["status"], "valid")
+        self.assertEqual(
+            valid["installBackup"].get("capturedAt"),
+            backup.captured_at,
+        )
+        self.assertEqual(valid["result"], "success")
+
+        self.layout.install_backup_theme.write_bytes(theme + b"tampered")
+        invalid = self.api.get_overview()
+        self.assertEqual(invalid["installBackup"]["status"], "invalid")
+        self.assertEqual(invalid["result"], "partial")
+        self.assertIn("SHA-256", invalid["message"])
+
+    def test_pending_overview_marks_untrusted_evidence_and_ignores_terminal(
+        self,
+    ) -> None:
+        now = FixedClock().now()
+        timestamp = now.isoformat(timespec="seconds")
+        ignored = self.layout.runtime / "ordinary"
+        ignored.mkdir()
+        (self.layout.runtime / "accent-empty").mkdir()
+        (self.layout.runtime / "accent-file").write_text("not a directory")
+
+        corrupt_dir = self.layout.runtime / "accent-20260724T120001-00000001"
+        corrupt_dir.mkdir()
+        (corrupt_dir / "auto.json").write_text("{", encoding="utf-8")
+
+        state_after = AppState(False, "day", timestamp, "day", "success")
+
+        def transaction(transaction_id: str, *, status: str = "planned"):
+            return AutoTransaction(
+                transaction_id=transaction_id,
+                status=status,
+                started_at=timestamp,
+                updated_at=timestamp,
+                target_profile="day",
+                target_apps_theme="light",
+                learn_profile=None,
+                state_before_sha256="0" * 64,
+                state_after=state_after,
+                state_after_sha256=json_document_sha256(state_after.as_dict()),
+                error_code=("auto.failed" if status == "failed" else None),
+                message=("failed" if status == "failed" else None),
+            )
+
+        mismatch_dir = self.layout.runtime / "accent-20260724T120002-00000002"
+        mismatch_dir.mkdir()
+        atomic_write_json(
+            mismatch_dir / "auto.json",
+            transaction("accent-20260724T120003-00000003").as_dict(),
+        )
+
+        terminal_dir = self.layout.runtime / "accent-20260724T120004-00000004"
+        terminal_dir.mkdir()
+        atomic_write_json(
+            terminal_dir / "auto.json",
+            transaction(terminal_dir.name, status="failed").as_dict(),
+        )
+
+        pending_dir = self.layout.runtime / "accent-20260724T120005-00000005"
+        pending_dir.mkdir()
+        atomic_write_json(
+            pending_dir / "auto.json",
+            transaction(pending_dir.name).as_dict(),
+        )
+        atomic_write_json(
+            pending_dir / "journal.json",
+            {"kind": "wrong.kind", "status": "applied"},
+        )
+
+        summaries = self.api._pending_auto_transactions_summary()
+        self.assertEqual(
+            [(item["transactionId"], item["status"]) for item in summaries],
+            [
+                (corrupt_dir.name, "untrusted"),
+                (mismatch_dir.name, "untrusted"),
+                (pending_dir.name, "planned"),
+            ],
+        )
+        self.assertEqual(summaries[2].get("accentJournalStatus"), "untrusted")
+
+    def test_overview_reports_malformed_event_log_and_invalid_appearance_reader(
+        self,
+    ) -> None:
+        self.layout.event_log.parent.mkdir(parents=True, exist_ok=True)
+        self.layout.event_log.write_text("not-json\n", encoding="utf-8")
+
+        overview = self.api.get_overview()
+        self.assertFalse(overview["recentLog"]["available"])
+        self.assertIn("JSONDecodeError", overview["recentLog"]["message"])
+
+        with patch.object(self.api, "_current_appearance_reader", lambda: object()):
+            appearance = self.api.read_current_windows_appearance()
+        self.assertEqual(appearance["result"], "failed")
+        self.assertIn("invalid value", appearance["message"])
 
     def test_workspace_validation_requires_matching_hex_and_rgb(self) -> None:
         valid = self.api.validate_workspace(workspace_payload())

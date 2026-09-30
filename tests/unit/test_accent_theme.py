@@ -295,6 +295,79 @@ class ManagedThemeApplyTests(unittest.TestCase):
         self.assertTrue(caught.exception.rollback_succeeded)
         self.assertIn(("set_v2_index", 6), backend.calls)
 
+    def test_original_index_rollback_polls_until_visual_state_converges(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            _backup, target, managed, backend = self._fixture(Path(directory))
+            wrong_state = read_visual_state(theme_bytes("0XC40078D4"))
+            rollback_reads = 0
+
+            def delayed_visual_read():
+                nonlocal rollback_reads
+                if any(name == "set_v2_index" for name, _ in backend.calls):
+                    rollback_reads += 1
+                    if rollback_reads >= 3:
+                        return managed.before
+                return wrong_state
+
+            with self.assertRaises(LiveThemeApplyError) as caught:
+                apply_and_verify_theme_v2(
+                    target,
+                    managed.after,
+                    managed.before,
+                    backend=backend,
+                    settle_seconds=0,
+                    verification_timeout_seconds=0.005,
+                    verification_poll_interval_seconds=0.001,
+                    rollback_timeout_seconds=0.2,
+                    visual_state_reader=delayed_visual_read,
+                )
+
+        self.assertTrue(caught.exception.rollback_succeeded)
+        self.assertGreaterEqual(rollback_reads, 3)
+
+    def test_backup_rollback_polls_with_its_own_deadline_until_converged(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            backup, target, managed, backend = self._fixture(root)
+            wrong = root / "wrong.theme"
+            wrong.write_bytes(theme_bytes("0XC40078D4"))
+            backend.apply_active_paths.append(wrong)
+            backend.restore_original_on_set = False
+            wrong_state = read_visual_state(wrong.read_bytes())
+            fallback_reads = 0
+
+            def delayed_visual_read():
+                nonlocal fallback_reads
+                apply_calls = sum(name == "apply_theme_v2" for name, _ in backend.calls)
+                if apply_calls >= 2:
+                    fallback_reads += 1
+                    if fallback_reads >= 3:
+                        return managed.before
+                return wrong_state
+
+            with self.assertRaises(LiveThemeApplyError) as caught:
+                apply_and_verify_theme_v2(
+                    target,
+                    managed.after,
+                    managed.before,
+                    rollback_path=backup,
+                    backend=backend,
+                    settle_seconds=0,
+                    verification_timeout_seconds=0.005,
+                    verification_poll_interval_seconds=0.001,
+                    rollback_timeout_seconds=0.2,
+                    visual_state_reader=delayed_visual_read,
+                )
+
+        self.assertTrue(caught.exception.rollback_succeeded)
+        self.assertGreaterEqual(fallback_reads, 3)
+        self.assertEqual(
+            [call[0] for call in backend.calls].count("apply_theme_v2"),
+            2,
+        )
+
     def test_backup_fallback_runs_when_index_restore_is_insufficient(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

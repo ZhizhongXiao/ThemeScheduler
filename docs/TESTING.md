@@ -23,7 +23,9 @@ python tools/test.py release
 棘轮。
 
 真实主题、任务、安装和卸载不由通用命令自动执行，必须使用对应验收清单并单独
-授权。干净设备生命周期见 [CLEAN_MACHINE_ACCEPTANCE.md](CLEAN_MACHINE_ACCEPTANCE.md)，
+授权。1.0.1 最终候选的干净设备生命周期见
+[CLEAN_MACHINE_ACCEPTANCE_1.0.1.md](CLEAN_MACHINE_ACCEPTANCE_1.0.1.md)；历史 TS-142
+结论见 [CLEAN_MACHINE_ACCEPTANCE.md](CLEAN_MACHINE_ACCEPTANCE.md)，
 覆盖率和静态质量规则见 [CODE_QUALITY.md](CODE_QUALITY.md)。
 
 `0.1.5` 回归必须覆盖：config v1→v2 兼容读取、完整 GUI API 契约、权威当前外观

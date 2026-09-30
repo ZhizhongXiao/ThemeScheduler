@@ -28,15 +28,15 @@
 | 安装、修复与卸载开发 | [INSTALLATION.md](INSTALLATION.md) |
 | 普通用户安装 | [USER_INSTALLATION.md](USER_INSTALLATION.md) |
 | 构建与发布 | [RELEASE.md](RELEASE.md)、[打包说明](../packaging/README.md) |
-| 干净设备发布验收 | [CLEAN_MACHINE_ACCEPTANCE.md](CLEAN_MACHINE_ACCEPTANCE.md) |
+| 1.0.1 最终候选验收 | [CLEAN_MACHINE_ACCEPTANCE_1.0.1.md](CLEAN_MACHINE_ACCEPTANCE_1.0.1.md) |
+| 历史 0.1.2 / TS-142 验收 | [CLEAN_MACHINE_ACCEPTANCE.md](CLEAN_MACHINE_ACCEPTANCE.md) |
 | 产物保留与清理 | [ARTIFACTS.md](ARTIFACTS.md) |
 | 测试命令与层级 | [TESTING.md](TESTING.md) |
 
-当前维护版目标为 `1.0.1`，本次构建完成后正式发布位于 `artifacts/releases/1.0.1`；
-`1.0.0` 的发布产物将在新版本确认发布后废弃。昼夜完整外观、
-自动门禁、Coverage、双构建、Defender、测试整理、高风险分支、12 文件 strict 棘轮、
-任务桥测量、动态主题兼容和最终生命周期验收均已完成。0.1.2 的无 Python Windows x64
-TS-142 兼容性证据继续有效。
+最新正式版本为 `1.0.0`；`1.0.1` 尚未生成最终候选、正式目录、标签或 GitHub Release。
+原合并源码身份曾通过 Windows CI 和 647 项 release gate；当前维护分支包含后续发布阻塞
+修复，必须重新绑定 integration、coverage、Coverage 棘轮、release 和构建证据。`0.1.2` 的
+无 Python Windows x64 TS-142 验收仅作为历史证据继续有效。
 
 ## 测试选择
 
