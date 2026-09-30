@@ -1,8 +1,10 @@
 # ThemeScheduler Windows 打包方案
 
-状态：`1.0.1` 尚无冻结候选或正式发布目录。最终源码身份必须重新完成
-integration、coverage、Coverage 棘轮、release 门禁、Windows CI、双构建和变更驱动验收；
-候选写入 `artifacts/build/`，完整证据通过后才能进入 `artifacts/releases/1.0.1`。
+状态：`1.0.1` 已正式发布，`v1.0.1` 固定绑定源码提交
+`889dbe81a3e67e48780f16768e730ce3d695ec52` 和 `sourceTreeSha256`
+`5f24ff2c93f5f19b5a5e07d59ce1863c6d93ecc5467deba3678eaaa9657eaf57`。本文件中的构建
+命令用于复核或未来候选流程；任何新候选仍须绑定自己的 integration、coverage、Coverage
+棘轮、release、Windows CI、双构建和验收证据，且不得覆盖正式目录。
 每个版本的 `dist/` 只放用户分发文件，`evidence/` 保存发布清单、构建环境、
 测试/质量报告和展开载荷证据；根 `SHA256SUMS.txt` 绑定两部分。
 `0.1.1` 的经典 Setup/Uninstall、同版本修复、双配色与钟表边界、损坏卸载、
@@ -40,8 +42,9 @@ ThemeScheduler 是需要任务计划、快捷方式、升级、修复和卸载�
 
 `pyproject.toml` 已分离运行依赖和 `build` 构建依赖，`uv.lock` 已生成。锁文件属于发布输入，必须提交并在构建前执行一致性检查。
 
-最终 `1.0.1` 的可复现构建入口如下。执行前必须已经完成统一升版，并使用新的、
-不存在的候选输出根；不能直接写入或覆盖 `artifacts/releases/` 下的正式版本：
+以下命令记录 `1.0.1` 候选的可复现构建流程，供审计或未来复核。执行时必须使用新的、
+不存在的候选输出根；不能直接写入或覆盖 `artifacts/releases/` 下的正式版本，也不能
+用复核构建替换 GitHub 上已发布的 1.0.1：
 
 ```powershell
 uv sync --group build --group quality

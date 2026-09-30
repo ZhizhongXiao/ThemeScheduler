@@ -33,10 +33,14 @@
 | 产物保留与清理 | [ARTIFACTS.md](ARTIFACTS.md) |
 | 测试命令与层级 | [TESTING.md](TESTING.md) |
 
-最新正式版本为 `1.0.0`；`1.0.1` 尚未生成最终候选、正式目录、标签或 GitHub Release。
-原合并源码身份曾通过 Windows CI 和 647 项 release gate；当前维护分支包含后续发布阻塞
-修复，必须重新绑定 integration、coverage、Coverage 棘轮、release 和构建证据。`0.1.2` 的
-无 Python Windows x64 TS-142 验收仅作为历史证据继续有效。
+当前正式版本为 `1.0.1`，`v1.0.1` 标签和 GitHub Release 均绑定提交
+`889dbe81a3e67e48780f16768e730ce3d695ec52`；其 `sourceTreeSha256` 为
+`5f24ff2c93f5f19b5a5e07d59ce1863c6d93ecc5467deba3678eaaa9657eaf57`。该源码身份的
+release gate、Windows CI、正式构建和验收证据保存在 `artifacts/releases/1.0.1/` 与
+`artifacts/acceptance/`。发布后的文档维护提交属于新的 `main`，不改变 1.0.1 发布身份。
+客户机已完成首次安装、使用和卸载冒烟，未见明显异常；后续运行时异常仍待反馈收集。
+该次冒烟不代表所有 Windows 11 配置均已覆盖。`0.1.2` 的无 Python Windows x64 TS-142
+验收仅作为历史证据继续有效。
 
 ## 测试选择
 

@@ -4,8 +4,10 @@ ThemeScheduler 是面向 Windows 11 的个人昼夜外观计划工具。它按�
 Windows 模式、应用模式、强调色及其显示位置，使用 Windows 任务计划程序运行，并提供 pywebview 工作台、
 单文件 Setup、独立卸载器、交互通知和只读健康检查。
 
-当前最新正式版本为 `1.0.0`。`1.0.1` 是下一维护版目标，尚未冻结候选或正式发布；
-完成本轮修复后仍须按最终源码身份重新跑完整门禁、Coverage 棘轮和构建验收。
+当前最新正式版本为 `1.0.1`，由 `v1.0.1` 标签发布。发布源码提交固定为
+`889dbe81a3e67e48780f16768e730ce3d695ec52`，源码树身份为
+`5f24ff2c93f5f19b5a5e07d59ce1863c6d93ecc5467deba3678eaaa9657eaf57`。
+发布后的文档维护不会改变该标签或 Release 的源码身份。
 
 `1.0.0` 的历史验收结论保持不变：
 
@@ -15,10 +17,9 @@ Windows 模式、应用模式、强调色及其显示位置，使用 Windows 任
 - 最终门禁、Coverage 棘轮、双构建一致性和 Defender 扫描均已通过；
 - 另一台干净、无 Python 的 Windows x64 设备已完成安装、计划边界、升级和卸载验收。
 
-`1.0.1` 计划基于 `1.0.0` 完整昼夜主题基线，收敛 Setup 结果传播、任务重试与
+`1.0.1` 基于 `1.0.0` 完整昼夜主题基线，收敛 Setup 结果传播、任务重试与
 `SKIPPED` occurrence 抑制、主题回滚读回、数值版本资源校验、昼夜间隔校验和事件日志
-脱敏等可靠性问题。只有最终构建和验收通过后，正式分发目录才会是
-`artifacts/releases/1.0.1/dist/`。普通用户只需要
+脱敏等可靠性问题。正式发布目录为 `artifacts/releases/1.0.1/dist/`。普通用户只需要
 `ThemeScheduler-Setup.exe`、`RELEASE-README.md` 和 `SHA256SUMS.txt`。
 `1.0.0` 继承 0.1.4/0.1.5 的权威实时外观读取与完整计划，并把 Windows 模式、应用模式、
 强调色、开始菜单/任务栏强调色及标题栏/窗口边框强调色全部纳入昼夜计划。
@@ -28,8 +29,9 @@ strict 棘轮、任务桥性能决策和 Windows 11 动态主题兼容均已收�
 607 项发布门禁、Coverage 棘轮、双构建、PE/payload 校验、Defender 和真实桌面用户
 环境下的安装、升级、外观恢复、卸载及零残留验收。详见
 [1.0 发布路线](docs/ROADMAP_1.0.md)。
-1.0.1 最终候选的无 Python 设备验收按
-[1.0.1 验收清单](docs/CLEAN_MACHINE_ACCEPTANCE_1.0.1.md)执行；
+1.0.1 的验收步骤保存在
+[1.0.1 验收清单](docs/CLEAN_MACHINE_ACCEPTANCE_1.0.1.md)，实际发布与验收记录保存在
+`artifacts/releases/1.0.1/` 和 `artifacts/acceptance/`；
 [TS-142 清单](docs/CLEAN_MACHINE_ACCEPTANCE.md)仅记录历史 `0.1.2` 验收。
 
 ## 文档

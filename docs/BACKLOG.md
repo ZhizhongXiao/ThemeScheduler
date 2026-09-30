@@ -1,22 +1,21 @@
 # ThemeScheduler 维护清单
 
-本文记录 `1.0.0` 的历史验收状态与 `1.0.1` 发布收口状态。阶段顺序和退出条件见
+本文记录 `1.0.0` 的历史验收状态与 `1.0.1` 正式发布状态。阶段顺序和退出条件见
 [ROADMAP_1.0.md](ROADMAP_1.0.md)；已完成版本结论见 [RELEASE.md](RELEASE.md)，
 机器证据保存在正式发布与 `artifacts/acceptance/`。
 
 ## 当前基线
 
-- `1.0.1` 尚无最终候选、正式目录、标签或 GitHub Release；最新正式版本仍为 `1.0.0`；
-- 基于合并源码的新一轮发布审计发现并要求收口三个阻塞：SKIPPED occurrence 抑制、rollback 有界轮询、三个 EXE 的 PE 数值版本；
-- 本维护分支实现了上述修复并补充故障注入测试；最终源码仍须重新运行 integration、coverage、Coverage 棘轮、release 和 Windows CI；
-- `3fd72090b577fc7f2c0d9dfbeecd86d095d23d89` 上的 647 项 release gate 仅绑定该原始源码身份，不能替代修复后的报告；
-- 1.0.1 还包含 Setup partial 结果传播、Queue/有限 mutex/future AutoRetry、pending/task 对账、主题应用与回滚验证、配置间隔和事件日志落盘脱敏等既定可靠性修复；
+- `v1.0.1` 已正式发布；标签和 Release 源码固定为 `889dbe81a3e67e48780f16768e730ce3d695ec52`，正式源码身份为 `5f24ff2c93f5f19b5a5e07d59ce1863c6d93ecc5467deba3678eaaa9657eaf57`；
+- 正式发布证据包含绑定该源码身份的 660 项 release gate、Coverage、Windows CI、A/B 构建及验收记录；详见 `artifacts/releases/1.0.1/` 和 `artifacts/acceptance/`；
+- 客户机已完成首次安装、使用和卸载冒烟，未见明显异常；后续运行时异常仍待反馈收集，不将该次冒烟描述为长期运行或广泛兼容性验收；
+- 1.0.1 包含 Setup partial 结果传播、Queue/有限 mutex/future AutoRetry、pending/task 对账、主题应用与回滚验证、配置间隔和事件日志落盘脱敏等可靠性修复；
 - DST 只完成边界行为刻画，未在缺少实机证据时改变时区实现；断电级配置束 WAL、Authenticode 与 SBOM 仍是明确边界；
-- 按用户要求，待 `1.0.1` 发布确认后废弃 `1.0.0` 发布包，保留 Git 标签/源码历史；
+- `1.0.0` 发布包、Release 附件及 Git 标签/源码历史保留供追溯；
 - `1.0.0` 已完成自动门禁、可复现构建、Defender 和变更驱动的 Windows 实机验收；
-- 正式发布位于 `artifacts/releases/1.0.0`；
+- `1.0.0` 历史正式发布目录位于 `artifacts/releases/1.0.0`；
 - `0.1.4` 的实时外观读取修复已完成定向实机验收；
-- 当前源码与发布文档已统一为正式 `1.0.0`；其 0.1.5 功能基线可分别保存 Windows 模式、应用模式、强调色、
+- 1.0.0 的 0.1.5 功能基线可分别保存 Windows 模式、应用模式、强调色、
   开始菜单/任务栏显示开关和标题栏/窗口边框显示开关；
 - 自动边界不再学习用户临时颜色，计划只由首次初始化或 GUI 显式导入/编辑更新；
 - `0.1.5 RC2` 已通过 577 项 release 测试、Coverage 逐模块棘轮、连续双构建、
