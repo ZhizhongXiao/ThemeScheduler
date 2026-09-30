@@ -65,9 +65,6 @@ namespace ThemeSchedulerShortcutBridge
     internal interface IShellLinkW
     {
         [PreserveSig]
-        int GetClassID(out Guid classId);
-
-        [PreserveSig]
         int GetPath(
             [Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder fileName,
             int characterCount,
