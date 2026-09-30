@@ -10,6 +10,7 @@ from typing import cast
 from ..accent_theme import theme_visual_state_from_dict
 from ..auto_transaction import (
     AUTO_TRANSACTION_FILE_NAME,
+    UNFINISHED_AUTO_STATUSES,
     AutoTransaction,
     AutoTransactionError,
     AutoTransactionStore,
@@ -49,12 +50,7 @@ class AutoRecoveryMixin(AutoRunnerBindings):
                 raise AutoTransactionError(
                     "Automatic transaction directory identity mismatch."
                 )
-            if transaction.status in {
-                "planned",
-                "windows-verified",
-                "state-committed",
-                "partial",
-            }:
+            if transaction.status in UNFINISHED_AUTO_STATUSES:
                 pending.append((directory, store, transaction))
         if len(pending) > 1:
             raise AutoTransactionError(

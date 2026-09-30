@@ -671,7 +671,13 @@ class AccentServiceTests(unittest.TestCase):
             )
 
             with self.assertRaises(LiveThemeApplyError):
-                apply_accent_profile(profile, layout, backend=backend, settle_seconds=0)
+                apply_accent_profile(
+                    profile,
+                    layout,
+                    backend=backend,
+                    settle_seconds=0,
+                    verification_timeout_seconds=0,
+                )
 
             transaction = next(layout.runtime.iterdir())
             journal = json.loads(
@@ -679,6 +685,20 @@ class AccentServiceTests(unittest.TestCase):
             )
             self.assertEqual(journal["status"], "failed")
             self.assertTrue(journal["rollbackSucceeded"])
+            diagnostics = journal["verificationDiagnostics"]
+            self.assertEqual(
+                diagnostics["expected"]["colorizationColor"],
+                "0XC4744DA9",
+            )
+            samples = diagnostics["samples"]
+            self.assertIsInstance(samples, list)
+            self.assertEqual(
+                samples[-1]["actual"]["colorizationColor"],
+                "0XC4FFB900",
+            )
+            self.assertIn("activeThemePath", samples[-1])
+            self.assertIn("observedAt", samples[-1])
+            self.assertIn("currentIndex", samples[-1])
             self.assertEqual(backend.set_indices, [6])
 
 

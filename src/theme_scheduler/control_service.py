@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .auto_transaction import (
     AUTO_TRANSACTION_FILE_NAME,
+    UNFINISHED_AUTO_STATUSES,
     AutoTransactionStore,
 )
 from .control import (
@@ -19,10 +20,6 @@ from .errors import ThemeSchedulerRuntimeError
 from .log_policy import EventLogSink, EventLogWriter, LogEvent
 from .state import AppState, StateStore
 from .storage import UserDataLayout
-
-_UNFINISHED_AUTO_STATUSES = frozenset(
-    {"planned", "windows-verified", "state-committed", "partial"}
-)
 
 
 class PendingAutoTransactionError(ThemeSchedulerRuntimeError):
@@ -47,7 +44,7 @@ def ensure_no_pending_auto_transaction(runtime: Path) -> None:
             raise PendingAutoTransactionError(
                 "Automatic transaction directory identity mismatch."
             )
-        if transaction.status in _UNFINISHED_AUTO_STATUSES:
+        if transaction.status in UNFINISHED_AUTO_STATUSES:
             pending.append(directory.name)
     if pending:
         raise PendingAutoTransactionError(

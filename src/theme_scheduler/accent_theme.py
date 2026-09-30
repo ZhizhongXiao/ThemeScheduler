@@ -6,12 +6,14 @@ from __future__ import annotations
 # pyright: strict, reportUnnecessaryIsInstance=false
 import hashlib
 import json
+import math
 import os
 import re
 import subprocess
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Protocol
 from uuid import UUID, uuid4
@@ -32,9 +34,16 @@ class ThemeFileError(DataError):
 class LiveThemeApplyError(ThemeSchedulerRuntimeError):
     """Raised when live theme apply fails, with explicit rollback status."""
 
-    def __init__(self, message: str, *, rollback_succeeded: bool) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        rollback_succeeded: bool,
+        verification_diagnostics: dict[str, object] | None = None,
+    ) -> None:
         super().__init__(message)
         self.rollback_succeeded = rollback_succeeded
+        self.verification_diagnostics = verification_diagnostics
 
 
 @dataclass(frozen=True)
@@ -111,6 +120,18 @@ class ThemeApplyV2Result:
     index_before: int
     bridge_target_index: int
     index_after: int
+    verification_diagnostics: dict[str, object]
+
+
+class _ThemeVerificationError(ThemeFileError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        diagnostics: dict[str, object],
+    ) -> None:
+        super().__init__(message)
+        self.diagnostics = diagnostics
 
 
 def _section_span(content: bytes, section: str) -> tuple[int, int]:
@@ -666,6 +687,131 @@ def _verify_current_index(
         )
 
 
+def _verification_timestamp() -> str:
+    return datetime.now().astimezone().isoformat(timespec="milliseconds")
+
+
+def _poll_theme_visual_state(
+    backend: ThemeApplyV2Backend,
+    expected: ThemeVisualState,
+    *,
+    visual_state_reader: Callable[[], ThemeVisualState] | None,
+    target_index: int,
+    index_before: int,
+    timeout_seconds: float,
+    poll_interval_seconds: float,
+) -> tuple[Path, ThemeVisualState, int, dict[str, object]]:
+    started_at = _verification_timestamp()
+    started_monotonic = time.monotonic()
+    deadline = started_monotonic + timeout_seconds
+    samples: list[dict[str, object]] = []
+    last_failures: list[str] = []
+
+    while True:
+        active_path: Path | None = None
+        actual: ThemeVisualState | None = None
+        current_index: int | None = None
+        custom_index: int | None = None
+        failures: list[str] = []
+        sample: dict[str, object] = {"sampleStartedAt": _verification_timestamp()}
+
+        try:
+            active_path, actual = _read_active_visual_state(
+                backend,
+                visual_state_reader,
+            )
+            sample["activeThemePath"] = str(active_path)
+            sample["actual"] = actual.as_dict()
+            failures.extend(_visual_state_failures(actual, expected))
+        except Exception as exc:
+            failures.append(f"Active visual-state read failed: {exc}")
+
+        try:
+            current_index, custom_index = backend.current_v2_indices()
+            sample["currentIndex"] = current_index
+            sample["customIndex"] = custom_index
+            try:
+                _verify_current_index(
+                    target_index=target_index,
+                    current_index=current_index,
+                    custom_index=custom_index,
+                )
+            except ThemeFileError as exc:
+                failures.append(str(exc))
+        except Exception as exc:
+            failures.append(f"Theme index read failed: {exc}")
+
+        sample["observedAt"] = _verification_timestamp()
+        sample["failures"] = failures
+        samples.append(sample)
+        if (
+            not failures
+            and active_path is not None
+            and actual is not None
+            and current_index is not None
+        ):
+            diagnostics = _theme_verification_diagnostics(
+                expected=expected,
+                samples=samples,
+                started_at=started_at,
+                started_monotonic=started_monotonic,
+                timeout_seconds=timeout_seconds,
+                poll_interval_seconds=poll_interval_seconds,
+                index_before=index_before,
+                target_index=target_index,
+            )
+            return active_path, actual, current_index, diagnostics
+
+        last_failures = failures
+        remaining = deadline - time.monotonic()
+        if remaining <= 0 or poll_interval_seconds <= 0:
+            break
+        time.sleep(min(poll_interval_seconds, remaining))
+
+    diagnostics = _theme_verification_diagnostics(
+        expected=expected,
+        samples=samples,
+        started_at=started_at,
+        started_monotonic=started_monotonic,
+        timeout_seconds=timeout_seconds,
+        poll_interval_seconds=poll_interval_seconds,
+        index_before=index_before,
+        target_index=target_index,
+    )
+    final_observation = samples[-1].get("observedAt", "unknown time")
+    detail = "; ".join(last_failures) or "The active theme did not match."
+    raise _ThemeVerificationError(
+        f"Theme verification did not converge within {timeout_seconds:.3f}s; "
+        f"last observation at {final_observation}: {detail}",
+        diagnostics=diagnostics,
+    )
+
+
+def _theme_verification_diagnostics(
+    *,
+    expected: ThemeVisualState,
+    samples: list[dict[str, object]],
+    started_at: str,
+    started_monotonic: float,
+    timeout_seconds: float,
+    poll_interval_seconds: float,
+    index_before: int,
+    target_index: int,
+) -> dict[str, object]:
+    return {
+        "kind": "themescheduler.theme-verification",
+        "startedAt": started_at,
+        "completedAt": _verification_timestamp(),
+        "elapsedSeconds": round(time.monotonic() - started_monotonic, 3),
+        "timeoutSeconds": timeout_seconds,
+        "pollIntervalSeconds": poll_interval_seconds,
+        "expected": expected.as_dict(),
+        "indexBefore": index_before,
+        "bridgeTargetIndex": target_index,
+        "samples": samples,
+    }
+
+
 def _try_restore_original_index(
     backend: ThemeApplyV2Backend,
     *,
@@ -741,10 +887,20 @@ def apply_and_verify_theme_v2(
     rollback_path: Path | None = None,
     backend: ThemeApplyV2Backend | None = None,
     settle_seconds: float = 2.0,
+    verification_timeout_seconds: float = 5.0,
+    verification_poll_interval_seconds: float = 0.25,
     visual_state_reader: Callable[[], ThemeVisualState] | None = None,
 ) -> ThemeApplyV2Result:
+    for name, value in (
+        ("verification_timeout_seconds", verification_timeout_seconds),
+        ("verification_poll_interval_seconds", verification_poll_interval_seconds),
+    ):
+        if isinstance(value, bool) or not math.isfinite(value) or value < 0:
+            raise ValueError(f"{name} must be a finite non-negative number.")
+
     backend = backend or WindowsThemeApplyBackend()
     before_index = backend.current_v2_index()
+    verification_diagnostics: dict[str, object] | None = None
     try:
         bridge_before, target_index = backend.apply_theme_v2(managed_path)
         _verify_bridge_before(
@@ -752,27 +908,28 @@ def apply_and_verify_theme_v2(
             bridge_before=bridge_before,
         )
         _settle(settle_seconds)
-        current_index, custom_index = backend.current_v2_indices()
-        _verify_current_index(
-            target_index=target_index,
-            current_index=current_index,
-            custom_index=custom_index,
+        active_path, actual, current_index, verification_diagnostics = (
+            _poll_theme_visual_state(
+                backend,
+                expected,
+                visual_state_reader=visual_state_reader,
+                target_index=target_index,
+                index_before=before_index,
+                timeout_seconds=verification_timeout_seconds,
+                poll_interval_seconds=verification_poll_interval_seconds,
+            )
         )
-        active_path, actual = _read_active_visual_state(backend, visual_state_reader)
-        failures = _visual_state_failures(
-            actual,
-            expected,
-        )
-        if failures:
-            raise ThemeFileError(failures[0])
         return ThemeApplyV2Result(
             active_path,
             actual,
             before_index,
             target_index,
             current_index,
+            verification_diagnostics,
         )
     except Exception as exc:
+        if isinstance(exc, _ThemeVerificationError):
+            verification_diagnostics = exc.diagnostics
         rollback_succeeded = _rollback_theme_v2(
             backend,
             index_before=before_index,
@@ -784,4 +941,5 @@ def apply_and_verify_theme_v2(
         raise LiveThemeApplyError(
             f"Managed theme V2 apply failed: {exc}",
             rollback_succeeded=rollback_succeeded,
+            verification_diagnostics=verification_diagnostics,
         ) from exc

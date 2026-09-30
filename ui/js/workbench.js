@@ -53,6 +53,7 @@ const IMPORTANT_FEEDBACK_ACTIONS = new Set([
   "saveWorkspace",
   "saveWorkspaceAndApply",
   "setPaused",
+  "checkTask",
   "repairNotificationIdentity",
   "repairTask",
   "resetPreferences",
@@ -502,6 +503,9 @@ function diagnosticSummary() {
     `核心状态：${data.result}`,
     `当前目标：${data.targetProfile}`,
     `自动切换：${data.state?.paused ? "已暂停" : "运行中"}`,
+    `上次自动运行：${data.state?.lastRunAt || "尚无记录"}`,
+    `上次运行结果：${data.state?.lastResult || "未知"}`,
+    `上次应用 profile：${data.state?.lastAppliedProfile || "未知"}`,
     `任务定义：${data.task?.valid ? "正常" : "需检查"}`,
     `昼间 profile：${data.profiles?.day?.valid ? "有效" : "无效"}`,
     `夜间 profile：${data.profiles?.night?.valid ? "有效" : "无效"}`,
@@ -519,6 +523,12 @@ function diagnosticSummary() {
       `当前外观来源：${appearance.accentSource}`,
       `活动主题与实时状态：${appearance.sourcesDiverged ? "存在差异" : "一致"}`,
     );
+    if (appearance.colorizationColor) {
+      lines.push(`实时强调色值：${appearance.colorizationColor}`);
+    }
+    if (appearance.themeAppearance?.colorizationColor) {
+      lines.push(`活动主题文件强调色值：${appearance.themeAppearance.colorizationColor}`);
+    }
     if (appearance.sourcesDiverged) {
       lines.push(
         `差异字段：${appearance.divergences
@@ -528,6 +538,23 @@ function diagnosticSummary() {
     }
   } else {
     lines.push("当前外观来源：不可用");
+  }
+  for (const transaction of data.pendingTransactions || []) {
+    lines.push(
+      `未结束自动事务：${transaction.transactionId} · ${transaction.status}`,
+    );
+    if (transaction.accentJournalStatus) {
+      lines.push(`外观事务阶段：${transaction.accentJournalStatus}`);
+    }
+    if (transaction.beforeColorizationColor || transaction.targetColorizationColor) {
+      lines.push(
+        `事务强调色边界：${transaction.beforeColorizationColor || "未知"}`
+        + ` → ${transaction.targetColorizationColor || "未知"}`,
+      );
+    }
+    if (transaction.errorCode || transaction.evidenceError) {
+      lines.push(`事务错误：${transaction.errorCode || transaction.evidenceError}`);
+    }
   }
   return lines.join("\n");
 }
@@ -635,9 +662,17 @@ async function copyText(text) {
 function renderOverview(data, options = {}) {
   state.overview = data;
   const usable = ["success", "partial"].includes(data.result);
-  const healthy = data.result === "success";
+  const pendingTransactions = data.pendingTransactions || [];
+  const healthy = data.result === "success" && pendingTransactions.length === 0;
   $("#health-pill").className = `status-pill ${healthy ? "is-ok" : "is-warn"}`;
-  setText("#health-text", healthy ? "核心状态可用" : "部分状态不可用");
+  setText(
+    "#health-text",
+    pendingTransactions.length
+      ? "自动事务待检查"
+      : healthy
+        ? "核心状态可用"
+        : "部分状态不可用",
+  );
   setText("#overview-report", JSON.stringify(data, null, 2));
   setText("#task-report", JSON.stringify(data.task, null, 2));
   setText(
@@ -671,6 +706,13 @@ function renderOverview(data, options = {}) {
   const initialSetupPending = data.initialSetupPending === true;
   state.initialSetupPending = initialSetupPending;
   $("#initial-setup-banner").hidden = !initialSetupPending;
+  const settingsEntry = $("#open-settings-button");
+  settingsEntry.classList.toggle("is-initial-setup", initialSetupPending);
+  if (initialSetupPending) {
+    settingsEntry.setAttribute("aria-describedby", "initial-setup-banner");
+  } else {
+    settingsEntry.removeAttribute("aria-describedby");
+  }
   automationToggle.disabled = state.busy || initialSetupPending;
   $("#save-only-button").textContent = initialSetupPending
     ? "保存并启用"
@@ -746,12 +788,15 @@ async function callApi(action, work, successMessage) {
   try {
     const result = apiContracts.validate(action, await work());
     const failed = !["success", "changed", "no-change", "applied", "restored"].includes(result.result);
+    const checkTaskDrift = action === "checkTask" && result.result === "drift";
     if (failed || IMPORTANT_FEEDBACK_ACTIONS.has(action)) {
       showToast(result.message || successMessage || result.result, failed, {
         action,
         duration: failed ? 2800 : 1200,
         localizedMessage: failed
-          ? (FEEDBACK_LABELS[action] || "操作") + "未完成"
+          ? checkTaskDrift
+            ? "任务计划存在差异"
+            : (FEEDBACK_LABELS[action] || "操作") + "未完成"
           : successMessage || FEEDBACK_LABELS[action],
       });
     }
@@ -980,9 +1025,6 @@ $$('[data-boundary-tab]').forEach((button) => {
 $("#open-settings-button").addEventListener("click", () => {
   activatePlanView("settings", { focus: true });
 });
-$("#initial-setup-button").addEventListener("click", () => {
-  activatePlanView("settings", { focus: true });
-});
 $("#back-to-overview-button").addEventListener("click", async () => {
   if (state.dirty && !await requestConfirmation(
     "尚未保存的设置将会丢失。",
@@ -1148,7 +1190,10 @@ $("#check-task-button").addEventListener("click", async () => {
     "checkTask",
     () => window.pywebview.api.check_task(),
   );
-  if (result) await refresh();
+  if (result) {
+    await refresh();
+    setText("#task-report", JSON.stringify(result.inspection || result, null, 2));
+  }
 });
 $("#check-health-button").addEventListener("click", runHealthInspection);
 $("#copy-diagnostic-button").addEventListener("click", async () => {
@@ -1162,6 +1207,32 @@ $("#copy-diagnostic-button").addEventListener("click", async () => {
   } catch (error) {
     showToast(String(error.message || error), true, { duration: 2800 });
   }
+});
+$$(`[data-copy-report]`).forEach((button) => {
+  const reportId = button.dataset.copyReport;
+  const originalLabel = button.getAttribute("aria-label") || "复制完整内容";
+  button.addEventListener("click", async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const report = reportId ? document.getElementById(reportId) : null;
+    if (!report) {
+      showToast("找不到要复制的诊断输出。", true, { duration: 2800 });
+      return;
+    }
+    try {
+      await copyText(report.textContent || "");
+      button.dataset.copied = "true";
+      button.setAttribute("aria-label", "已复制完整内容");
+      button.setAttribute("title", "已复制完整内容");
+      setTimeout(() => {
+        delete button.dataset.copied;
+        button.setAttribute("aria-label", originalLabel);
+        button.setAttribute("title", "复制完整内容");
+      }, 1800);
+    } catch (error) {
+      showToast(String(error.message || error), true, { duration: 2800 });
+    }
+  });
 });
 $$("[data-import-appearance]").forEach((button) => {
   button.addEventListener("click", async () => {

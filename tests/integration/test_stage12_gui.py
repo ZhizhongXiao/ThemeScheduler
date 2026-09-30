@@ -476,15 +476,29 @@ class Stage12FrontendContractTests(unittest.TestCase):
         self.assertLess(result, command)
 
     def test_debug_details_are_collapsed_and_summary_avoids_paths(self) -> None:
-        self.assertIn("<summary>查看任务定义</summary>", self.html)
-        self.assertIn("<summary>查看状态与昼夜 profile</summary>", self.html)
+        self.assertIn("<span>任务计划定义</span>", self.html)
+        self.assertIn("<span>状态与昼夜 profile</span>", self.html)
+        self.assertIn('id="debug-evidence-title"', self.html)
+        self.assertIn('id="debug-schedule-evidence-title"', self.html)
+        self.assertIn('id="debug-appearance-evidence-title"', self.html)
         self.assertIn('id="recent-log-report"', self.html)
         self.assertIn('id="copy-diagnostic-button"', self.html)
         self.assertIn(
             'class="button button-secondary compact" id="copy-diagnostic-button"',
             self.html,
         )
+        for report_id in (
+            "recent-log-report",
+            "task-report",
+            "state-profile-report",
+            "appearance-report",
+            "overview-report",
+        ):
+            self.assertIn(f'data-copy-report="{report_id}"', self.html)
+        self.assertNotIn('data-copy-report="health-report"', self.html)
         self.assertIn('button.textContent = "已复制"', self.app)
+        self.assertIn('await copyText(report.textContent || "")', self.app)
+        self.assertIn("event.preventDefault();", self.app)
         summary_source = self.app[
             self.app.index("function diagnosticSummary") : self.app.index(
                 "async function copyText"
@@ -494,6 +508,47 @@ class Stage12FrontendContractTests(unittest.TestCase):
         self.assertNotIn("executable", summary_source)
         self.assertIn("核心状态：读取失败", summary_source)  # noqa: RUF001 - Match exact localized copy.
         self.assertIn('data.message || "后端未返回可用状态"', summary_source)
+        self.assertIn("上次自动运行", summary_source)
+        self.assertIn("未结束自动事务", summary_source)
+        self.assertIn("themeAppearance?.colorizationColor", summary_source)
+
+    def test_maintenance_actions_are_grouped_and_footer_is_page_local(self) -> None:
+        plan = self.html[
+            self.html.index('id="page-plan"') : self.html.index('id="page-maintenance"')
+        ]
+        maintenance = self.html[
+            self.html.index('id="page-maintenance"') : self.html.index(
+                'id="page-debug"'
+            )
+        ]
+        debug = self.html[self.html.index('id="page-debug"') :]
+        self.assertIn('id="maintenance-plan-title"', maintenance)
+        self.assertIn('id="maintenance-data-title"', maintenance)
+        self.assertIn('id="data-root"', maintenance)
+        self.assertIn("关闭窗口后程序不会驻留后台", maintenance)
+        self.assertNotIn('id="data-root"', plan + debug)
+        self.assertNotIn("关闭窗口后程序不会驻留后台", plan + debug)
+        self.assertNotIn("span-two", maintenance)
+        self.assertIn('id="check-task-button"', maintenance)
+
+    def test_responsive_workbench_and_non_clipped_hover_emphasis_are_defined(
+        self,
+    ) -> None:
+        self.assertIn("@media (max-width: 900px), (max-height: 760px)", self.styles)
+        self.assertIn("grid-template-rows: auto auto auto", self.styles)
+        self.assertIn(".maintenance-groups", self.styles)
+        self.assertIn(".debug-evidence-grid", self.styles)
+        self.assertIn(".settings-entry-card:hover", self.styles)
+        self.assertIn("transform: none", self.styles)
+
+    def test_task_check_presents_its_inspection_and_feedback(self) -> None:
+        self.assertIn('"checkTask",', self.app)
+        self.assertIn('"任务计划存在差异"', self.app)
+        self.assertIn(
+            'setText("#task-report", JSON.stringify(result.inspection || result, null, 2))',
+            self.app,
+        )
+        self.assertIn('"自动事务待检查"', self.app)
 
     def test_mutating_identity_repair_is_conditional_maintenance_action(self) -> None:
         maintenance = self.html[

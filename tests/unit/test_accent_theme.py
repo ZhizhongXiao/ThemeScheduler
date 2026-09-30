@@ -177,9 +177,83 @@ class ManagedThemeApplyTests(unittest.TestCase):
                 managed.before,
                 backend=backend,
                 settle_seconds=0,
+                verification_timeout_seconds=0,
             )
         self.assertEqual(result.actual.app_mode, "Light")
         self.assertEqual(result.index_after, 13)
+
+    def test_verification_polls_until_visual_state_converges(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            _backup, target, managed, backend = self._fixture(Path(directory))
+            reads = iter((managed.before, managed.after))
+
+            def read_visual_state():
+                return next(reads, managed.after)
+
+            result = apply_and_verify_theme_v2(
+                target,
+                managed.after,
+                managed.before,
+                backend=backend,
+                settle_seconds=0,
+                verification_timeout_seconds=0.1,
+                verification_poll_interval_seconds=0.001,
+                visual_state_reader=read_visual_state,
+            )
+
+        diagnostics = result.verification_diagnostics
+        samples = diagnostics["samples"]
+        self.assertIsInstance(samples, list)
+        assert isinstance(samples, list)
+        self.assertEqual(len(samples), 2)
+        first_sample = samples[0]
+        final_sample = samples[-1]
+        assert isinstance(first_sample, dict)
+        assert isinstance(final_sample, dict)
+        self.assertIn("observedAt", first_sample)
+        self.assertEqual(
+            first_sample["actual"],
+            managed.before.as_dict(),
+        )
+        self.assertEqual(final_sample["actual"], managed.after.as_dict())
+        self.assertEqual(final_sample["activeThemePath"], str(target))
+        self.assertEqual(final_sample["currentIndex"], 13)
+        self.assertEqual(final_sample["failures"], [])
+
+    def test_persistent_visual_mismatch_records_readback_before_rollback(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            backup, target, managed, backend = self._fixture(Path(directory))
+            with self.assertRaises(LiveThemeApplyError) as caught:
+                apply_and_verify_theme_v2(
+                    target,
+                    managed.after,
+                    managed.before,
+                    backend=backend,
+                    settle_seconds=0,
+                    verification_timeout_seconds=0.01,
+                    verification_poll_interval_seconds=0.001,
+                    visual_state_reader=lambda: managed.before,
+                )
+
+        error = caught.exception
+        self.assertTrue(error.rollback_succeeded)
+        self.assertIn("did not converge", str(error))
+        self.assertIn("ColorizationColor", str(error))
+        diagnostics = error.verification_diagnostics
+        self.assertIsNotNone(diagnostics)
+        assert diagnostics is not None
+        self.assertEqual(diagnostics["expected"], managed.after.as_dict())
+        samples = diagnostics["samples"]
+        self.assertIsInstance(samples, list)
+        assert isinstance(samples, list)
+        self.assertGreater(len(samples), 1)
+        last_sample = samples[-1]
+        assert isinstance(last_sample, dict)
+        self.assertEqual(last_sample["actual"], managed.before.as_dict())
+        self.assertEqual(last_sample["activeThemePath"], str(target))
+        self.assertEqual(last_sample["currentIndex"], 13)
+        self.assertIn("observedAt", last_sample)
+        self.assertEqual(backend.current_theme_path(), backup)
 
     def test_visual_failure_restores_original_index(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -192,6 +266,7 @@ class ManagedThemeApplyTests(unittest.TestCase):
                     managed.before,
                     backend=backend,
                     settle_seconds=0,
+                    verification_timeout_seconds=0,
                 )
         self.assertTrue(caught.exception.rollback_succeeded)
         self.assertIn(("set_v2_index", 6), backend.calls)
@@ -212,6 +287,7 @@ class ManagedThemeApplyTests(unittest.TestCase):
                     rollback_path=backup,
                     backend=backend,
                     settle_seconds=0,
+                    verification_timeout_seconds=0,
                 )
         self.assertTrue(caught.exception.rollback_succeeded)
         self.assertEqual(

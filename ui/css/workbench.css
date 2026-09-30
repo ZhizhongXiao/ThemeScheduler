@@ -37,7 +37,7 @@ html { min-height: 100%; }
 
 body {
   margin: 0;
-  min-width: 680px;
+  min-width: 560px;
   min-height: 100vh;
   background:
     radial-gradient(circle at 14% 4%, rgba(var(--purple-rgb), 0.2), transparent 33rem),
@@ -1282,7 +1282,7 @@ body { overflow: hidden; }
 }
 
 .initial-setup-banner {
-  grid-template-columns: 40px minmax(0, 1fr) auto;
+  grid-template-columns: 40px minmax(0, 1fr);
   margin-bottom: 10px;
 }
 
@@ -1401,6 +1401,10 @@ body { overflow: hidden; }
 }
 
 .settings-entry-card:hover { border-color: var(--purple-bright); transform: translateY(-1px); }
+.settings-entry-card.is-initial-setup {
+  border-color: var(--purple-bright);
+  box-shadow: 0 0 0 3px rgba(var(--purple-rgb), 0.2), 0 10px 28px rgba(var(--purple-rgb), 0.2);
+}
 .settings-entry-card span:nth-child(2) { min-width: 0; flex: 1; }
 .settings-entry-card small,
 .settings-entry-card strong,
@@ -1686,7 +1690,7 @@ body { overflow: hidden; }
 .plan-view[hidden] { display: none !important; }
 #plan-overview-view { display: flex; flex-direction: column; }
 .initial-setup-banner {
-  grid-template-columns: 40px minmax(0, 1fr) auto;
+  grid-template-columns: 40px minmax(0, 1fr);
   margin-bottom: 10px;
 }
 .overview-layout {
@@ -2192,6 +2196,245 @@ footer { flex: 0 0 auto; padding-top: 8px; }
   .overview-summary-dial .summary-clock { width: min(100%, 340px); }
   .settings-page-heading { grid-template-columns: auto 1fr auto; }
   .settings-layout { overflow: visible; }
+}
+
+/* Keep maintenance and diagnostics readable when the native window is resized. */
+.maintenance-groups {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
+  align-items: start;
+  gap: 16px;
+}
+.maintenance-group {
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--surface-quiet);
+}
+.maintenance-group-heading,
+.debug-evidence-group > header {
+  margin-bottom: 12px;
+}
+.maintenance-group-heading h3,
+.debug-evidence-group h3 {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.maintenance-group-heading p,
+.debug-evidence-group > header p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+.maintenance-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 8px;
+}
+.maintenance-list .list-action { min-width: 0; min-height: 64px; }
+.maintenance-list .list-action span { min-width: 0; }
+.maintenance-list .list-action small { line-height: 1.45; }
+.maintenance-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+  padding: 10px 2px 0;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.debug-grid {
+  grid-template-columns: minmax(0, 1.3fr) minmax(260px, 0.7fr);
+  align-items: stretch;
+}
+.debug-grid > .panel { min-width: 0; }
+.debug-section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+.debug-section-heading h2 { margin-bottom: 0; }
+.debug-section-heading > p {
+  max-width: 440px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+.debug-evidence-panel { margin-top: 14px; }
+.debug-evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.debug-evidence-group {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-quiet);
+}
+.debug-evidence-group > header { margin: 0 0 3px; }
+.raw-details {
+  min-width: 0;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface);
+}
+.raw-details summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  list-style: none;
+}
+.raw-details summary::before {
+  flex: 0 0 auto;
+  color: var(--muted);
+  content: "›";
+  font-size: 17px;
+  line-height: 1;
+  transition: transform 120ms ease;
+}
+.raw-details[open] summary::before { transform: rotate(90deg); }
+.raw-details summary::-webkit-details-marker { display: none; }
+.raw-details summary > span { min-width: 0; }
+.raw-details[open] summary { margin-bottom: 10px; }
+.raw-details .health-report { max-height: min(360px, 50vh); }
+.report-copy-button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-quiet);
+  color: var(--muted);
+  cursor: pointer;
+}
+.report-copy-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+.report-copy-button:hover,
+.report-copy-button[data-copied="true"] {
+  border-color: var(--purple-bright);
+  color: var(--purple-bright);
+}
+.report-copy-button:focus-visible {
+  outline: 2px solid var(--purple-bright);
+  outline-offset: 2px;
+}
+
+/* Hover emphasis uses shadow rather than moving controls into a clipped edge. */
+.button:hover,
+.settings-entry-card:hover,
+.settings-entry:hover {
+  transform: none;
+}
+.button:hover:not(:disabled) {
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.16);
+}
+.settings-entry-card:hover,
+.settings-entry:hover {
+  box-shadow: 0 10px 24px rgba(var(--purple-rgb), 0.18);
+}
+.settings-entry-card:focus-visible,
+.settings-entry:focus-visible,
+.list-action:focus-visible {
+  outline: 2px solid var(--purple-bright);
+  outline-offset: 2px;
+}
+
+@media (max-width: 900px), (max-height: 760px) {
+  body { overflow: auto; }
+  .app-shell,
+  .workspace-column { height: auto; min-height: 100vh; }
+  .app-shell { align-items: start; }
+  .activity-rail { position: sticky; top: 14px; align-self: start; height: calc(100vh - 28px); }
+  .workspace-column { display: flex; flex-direction: column; }
+  .tab-page { overflow: visible; }
+  #page-plan { flex: 0 0 auto; overflow: visible; }
+  .plan-view { height: auto; min-height: 0; }
+  .settings-workbench {
+    height: auto;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    overflow: visible;
+  }
+  .settings-dial-panel {
+    min-height: 390px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .settings-detail-panel { min-height: 540px; }
+  .settings-command-area { grid-column: 1; }
+  .overview-layout { height: auto; grid-template-columns: minmax(0, 1fr); }
+  .initial-setup-banner + .overview-layout { height: auto; }
+  .overview-plan-card { min-height: 500px; }
+  .overview-change-column {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .automation-card { min-height: 190px; flex: initial; }
+  .maintenance-groups,
+  .debug-grid,
+  .debug-evidence-grid { grid-template-columns: minmax(0, 1fr); }
+  .debug-section-heading { align-items: flex-start; flex-direction: column; gap: 6px; }
+}
+
+@media (max-width: 640px) {
+  body { min-width: 560px; }
+  .app-shell { grid-template-columns: 48px minmax(0, 1fr); column-gap: 10px; width: calc(100% - 16px); }
+  .activity-rail { width: 48px; padding-inline: 4px; }
+  .tab-button,
+  .activity-button { width: 38px; height: 38px; }
+  .hero { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .hero-actions { align-items: flex-start; }
+  .overview-change-column,
+  .maintenance-list { grid-template-columns: minmax(0, 1fr); }
+  .overview-profile-row { grid-template-columns: 22px minmax(0, 1fr); }
+  .overview-profile-row .profile-mode,
+  .overview-profile-row .profile-color { grid-column: 2; justify-content: flex-start; }
+  .settings-page-heading { grid-template-columns: minmax(0, 1fr) auto; }
+  .settings-dial-panel,
+  .settings-detail-panel,
+  #maintenance.panel,
+  .debug-evidence-panel { padding: 14px; }
+  .settings-dial-panel { min-height: 340px; }
+  .settings-detail-panel { min-height: 0; }
+  .boundary-tabs,
+  .detail-time-mode { grid-template-columns: minmax(0, 1fr); }
+  .boundary-detail .appearance-card-body { grid-template-columns: 72px minmax(0, 1fr); }
+  .color-value-grid { grid-template-columns: minmax(0, 1.2fr) repeat(3, minmax(38px, 0.6fr)); gap: 5px; }
+  .settings-notifications { align-items: flex-start; flex-wrap: wrap; }
+  .settings-notifications .button { margin-left: 0; }
+  .maintenance-footer { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .debug-grid .panel { padding: 14px; }
+  .diagnostic-actions { align-items: flex-end; flex-direction: column; }
+  .settings-command-area .command-bar { align-items: stretch; flex-direction: column; }
+  .settings-command-area .command-group { width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* M18 settings polish: keep the dial and readout in separate reserved areas. */

@@ -30,6 +30,9 @@ AUTO_TRANSACTION_STATUSES = frozenset(
     }
 )
 TERMINAL_AUTO_STATUSES = frozenset({"completed", "failed", "partial"})
+UNFINISHED_AUTO_STATUSES = frozenset(
+    {"planned", "windows-verified", "state-committed", "partial"}
+)
 _SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 _TRANSACTION_PATTERN = re.compile(r"accent-\d{8}T\d{6}-[0-9a-f]{8}")
 _ERROR_PATTERN = re.compile(r"[a-z0-9]+(?:[.-][a-z0-9]+)*")

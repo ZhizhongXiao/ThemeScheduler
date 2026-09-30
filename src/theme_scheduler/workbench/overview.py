@@ -3,15 +3,23 @@
 from __future__ import annotations
 
 import json
+import re
+from pathlib import Path
 from typing import Any
 
 from ..accent_profile import AccentProfileStore, RgbColor
 from ..appearance import CurrentWindowsAppearance
+from ..auto_transaction import (
+    AUTO_TRANSACTION_FILE_NAME,
+    UNFINISHED_AUTO_STATUSES,
+    AutoTransactionStore,
+)
 from ..backup import InstallBackupStore
 from ..config import AppConfig, ConfigStore
 from ..core import target_profile_at
 from ..initial_setup import initial_setup_pending
 from ..log_policy import LogEvent
+from ..persistence import load_json_object
 from ..scheduler import build_task_spec, inspect_task
 from ..state import StateStore
 from .contracts import (
@@ -19,6 +27,7 @@ from .contracts import (
     BackupSummary,
     OverviewResult,
     OverviewSections,
+    PendingAutoTransactionSummary,
     ProfileSummary,
     RecentLogSummary,
     StateSummary,
@@ -28,6 +37,107 @@ from .contracts import (
 
 
 class GuiOverviewMixin(WorkbenchBindings):
+    @staticmethod
+    def _journal_color(payload: object) -> str | None:
+        if not isinstance(payload, dict):
+            return None
+        color = payload.get("colorizationColor")
+        if not isinstance(color, str) or not re.fullmatch(
+            r"0[xX][0-9A-Fa-f]{8}", color
+        ):
+            return None
+        return color.upper()
+
+    def _add_accent_journal_summary(
+        self,
+        directory: Path,
+        summary: PendingAutoTransactionSummary,
+    ) -> None:
+        path = directory / "journal.json"
+        if not path.exists():
+            return
+        try:
+            journal = load_json_object(path)
+        except Exception:
+            summary["accentJournalStatus"] = "unreadable"
+            return
+        status = journal.get("status")
+        if (
+            journal.get("kind") != "themescheduler.accent-transaction"
+            or not isinstance(status, str)
+            or status not in {"prepared", "theme-applied", "applied", "failed"}
+        ):
+            summary["accentJournalStatus"] = "untrusted"
+            return
+        summary["accentJournalStatus"] = status
+        before_color = self._journal_color(journal.get("before"))
+        target_color = self._journal_color(
+            journal.get("actual") or journal.get("target")
+        )
+        if before_color is not None:
+            summary["beforeColorizationColor"] = before_color
+        if target_color is not None:
+            summary["targetColorizationColor"] = target_color
+
+    def _pending_auto_transactions_summary(
+        self,
+    ) -> list[PendingAutoTransactionSummary]:
+        runtime = self._layout.runtime
+        if not runtime.exists():
+            return []
+        try:
+            directories = sorted(runtime.iterdir(), key=lambda item: item.name)
+        except OSError as exc:
+            return [
+                {
+                    "transactionId": "runtime",
+                    "status": "untrusted",
+                    "evidenceError": type(exc).__name__,
+                }
+            ]
+        pending: list[PendingAutoTransactionSummary] = []
+        for directory in directories:
+            if not directory.is_dir() or not directory.name.startswith("accent-"):
+                continue
+            path = directory / AUTO_TRANSACTION_FILE_NAME
+            if not path.exists():
+                continue
+            try:
+                transaction = AutoTransactionStore(path).load()
+            except Exception:
+                pending.append(
+                    {
+                        "transactionId": directory.name,
+                        "status": "untrusted",
+                        "evidenceError": "unreadable-or-invalid",
+                    }
+                )
+                continue
+            if transaction.transaction_id != directory.name:
+                pending.append(
+                    {
+                        "transactionId": directory.name,
+                        "status": "untrusted",
+                        "evidenceError": "directory-identity-mismatch",
+                    }
+                )
+                continue
+            if transaction.status not in UNFINISHED_AUTO_STATUSES:
+                continue
+            summary = PendingAutoTransactionSummary(
+                transactionId=transaction.transaction_id,
+                status=transaction.status,
+                targetProfile=transaction.target_profile,
+                targetAppsTheme=transaction.target_apps_theme,
+                startedAt=transaction.started_at,
+                updatedAt=transaction.updated_at,
+                errorCode=transaction.error_code,
+                rollbackSucceeded=transaction.rollback_succeeded,
+            )
+            self._add_accent_journal_summary(directory, summary)
+            pending.append(summary)
+        return pending
+
     def _recent_log_summary(self, limit: int = 12) -> RecentLogSummary:
         path = self._layout.event_log
         if not path.exists():
@@ -202,13 +312,25 @@ class GuiOverviewMixin(WorkbenchBindings):
     ) -> OverviewSections:
         backup, backup_warning = self._build_backup_summary()
         task, task_warning = self._build_task_summary(config)
+        pending_transactions = self._pending_auto_transactions_summary()
         warnings = tuple(
-            warning for warning in (backup_warning, task_warning) if warning is not None
+            warning
+            for warning in (
+                backup_warning,
+                task_warning,
+                (
+                    "Unfinished automatic theme transaction requires inspection."
+                    if pending_transactions
+                    else None
+                ),
+            )
+            if warning is not None
         )
         return OverviewSections(
             self._build_profiles_summary(),
             backup,
             task,
+            pending_transactions,
             warnings,
         )
 
@@ -235,6 +357,7 @@ class GuiOverviewMixin(WorkbenchBindings):
                     profiles=sections.profiles,
                     installBackup=sections.install_backup,
                     task=sections.task,
+                    pendingTransactions=sections.pending_transactions,
                     recentLog=self._recent_log_summary(),
                     dataRoot=str(self._layout.root.resolve()),
                     executable=str(self._executable),

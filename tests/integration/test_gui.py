@@ -20,6 +20,12 @@ from theme_scheduler.accent_profile import (
 )
 from theme_scheduler.accent_theme import ThemeVisualState
 from theme_scheduler.appearance import CurrentWindowsAppearance
+from theme_scheduler.auto_transaction import (
+    AutoTransaction,
+    AutoTransactionStore,
+    file_sha256,
+    json_document_sha256,
+)
 from theme_scheduler.config import AppConfig, ConfigStore
 from theme_scheduler.gui import (
     frontend_entry,
@@ -29,6 +35,7 @@ from theme_scheduler.gui import (
 from theme_scheduler.initial_setup import (
     create_initial_setup_marker,
 )
+from theme_scheduler.persistence import atomic_write_json
 from theme_scheduler.scheduler import (
     TaskDefinitionBackup,
     TaskSpec,
@@ -333,6 +340,68 @@ class GuiApiTests(unittest.TestCase):
             "absent",
         )
         self.assertFalse(result["windowsChanged"])
+
+    def test_overview_warns_and_summarizes_unfinished_auto_transaction(self) -> None:
+        now = FixedClock().now()
+        timestamp = now.isoformat(timespec="seconds")
+        transaction_dir = self.layout.new_transaction_directory(now)
+        transaction_dir.mkdir()
+        state_after = AppState(False, "day", timestamp, "day", "success")
+        store = AutoTransactionStore(transaction_dir / "auto.json")
+        store.create(
+            AutoTransaction(
+                transaction_id=transaction_dir.name,
+                status="planned",
+                started_at=timestamp,
+                updated_at=timestamp,
+                target_profile="day",
+                target_apps_theme="light",
+                learn_profile=None,
+                state_before_sha256=file_sha256(self.layout.state),
+                state_after=state_after,
+                state_after_sha256=json_document_sha256(state_after.as_dict()),
+            )
+        )
+        before = ThemeVisualState("0", 0xC4744DA9, "Dark", "Dark")
+        target = ThemeVisualState("0", 0xC4000000, "Light", "Dark")
+        atomic_write_json(
+            transaction_dir / "journal.json",
+            {
+                "kind": "themescheduler.accent-transaction",
+                "schemaVersion": 2,
+                "status": "prepared",
+                "before": before.as_dict(),
+                "target": target.as_dict(),
+            },
+        )
+
+        result = self.api.get_overview()
+
+        self.assertEqual(result["result"], "partial")
+        self.assertEqual(
+            result["message"],
+            "Unfinished automatic theme transaction requires inspection.",
+        )
+        self.assertFalse(result["dataChanged"])
+        self.assertFalse(result["windowsChanged"])
+        self.assertEqual(
+            result["pendingTransactions"],
+            [
+                {
+                    "transactionId": transaction_dir.name,
+                    "status": "planned",
+                    "targetProfile": "day",
+                    "targetAppsTheme": "light",
+                    "startedAt": timestamp,
+                    "updatedAt": timestamp,
+                    "errorCode": None,
+                    "rollbackSucceeded": None,
+                    "accentJournalStatus": "prepared",
+                    "beforeColorizationColor": "0XC4744DA9",
+                    "targetColorizationColor": "0XC4000000",
+                }
+            ],
+        )
 
     def test_current_windows_appearance_read_is_draft_only(self) -> None:
         before_config = ConfigStore(self.layout.config).load()
@@ -815,6 +884,9 @@ class GuiAssetsAndRuntimeTests(unittest.TestCase):
         script = (entry.parent.parent / "js" / "workbench.js").read_text(
             encoding="utf-8"
         )
+        styles = (entry.parent.parent / "css" / "workbench.css").read_text(
+            encoding="utf-8"
+        )
 
         self.assertNotIn("http://", html)
         self.assertNotIn("https://", html)
@@ -849,6 +921,24 @@ class GuiAssetsAndRuntimeTests(unittest.TestCase):
         self.assertIn("scrollIntoView", script)
         self.assertIn('id="install-backup-state"', html)
         self.assertIn('id="initial-setup-banner"', html)
+        self.assertNotIn('id="initial-setup-button"', html)
+        self.assertNotIn('$("#initial-setup-button")', script)
+        self.assertIn(
+            'settingsEntry.classList.toggle("is-initial-setup", initialSetupPending)',
+            script,
+        )
+        self.assertIn(
+            'settingsEntry.setAttribute("aria-describedby", "initial-setup-banner")',
+            script,
+        )
+        self.assertIn(
+            ".settings-entry-card.is-initial-setup",
+            styles,
+        )
+        self.assertIn(
+            'settingsEntry.removeAttribute("aria-describedby")',
+            script,
+        )
         self.assertIn('id="run-actions"', html)
         self.assertIn("initialSetupPending", script)
         self.assertIn('class="command-group run-actions" id="run-actions" hidden', html)

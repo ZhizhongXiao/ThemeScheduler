@@ -137,6 +137,7 @@ def apply_accent_profile(
     backend: ThemeApplyV2Backend | None = None,
     appearance_backend: AppearanceSettingsBackend | None = None,
     settle_seconds: float = 2.0,
+    verification_timeout_seconds: float = 5.0,
 ) -> AccentApplyOutcome:
     """Apply the scheduled appearance in one rollback-capable transaction."""
 
@@ -249,12 +250,14 @@ def apply_accent_profile(
             rollback_path=rollback_path,
             backend=theme_backend,
             settle_seconds=settle_seconds,
+            verification_timeout_seconds=verification_timeout_seconds,
             visual_state_reader=visual_state_reader,
         )
         journal.update(
             {
                 "status": "theme-applied",
                 "actual": applied.actual.as_dict(),
+                "verificationDiagnostics": applied.verification_diagnostics,
                 "themeManager": {
                     "name": "IThemeManager2",
                     "indexBefore": applied.index_before,
@@ -285,12 +288,15 @@ def apply_accent_profile(
                 "rollbackSucceeded": rollback_succeeded,
             }
         )
+        if exc.verification_diagnostics is not None:
+            journal["verificationDiagnostics"] = exc.verification_diagnostics
         atomic_write_json(journal_path, journal, force=True)
         if rollback_succeeded == exc.rollback_succeeded:
             raise
         raise LiveThemeApplyError(
             f"{exc}; appearance registry rollback failed.",
             rollback_succeeded=False,
+            verification_diagnostics=exc.verification_diagnostics,
         ) from exc
     except Exception as exc:
         rollback_succeeded = rollback_accent_transaction(
@@ -319,6 +325,7 @@ def apply_accent_profile(
             "status": "applied",
             "completedAt": captured_at(),
             "actual": applied.actual.as_dict(),
+            "verificationDiagnostics": applied.verification_diagnostics,
             "themeManager": {
                 "name": "IThemeManager2",
                 "indexBefore": applied.index_before,

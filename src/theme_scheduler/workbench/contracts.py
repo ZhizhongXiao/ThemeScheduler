@@ -131,6 +131,21 @@ class TaskSummary(TypedDict):
     message: NotRequired[str]
 
 
+class PendingAutoTransactionSummary(TypedDict, total=False):
+    transactionId: Required[str]
+    status: Required[str]
+    evidenceError: str
+    targetProfile: str
+    targetAppsTheme: str
+    startedAt: str
+    updatedAt: str
+    errorCode: str | None
+    rollbackSucceeded: bool | None
+    accentJournalStatus: str
+    beforeColorizationColor: str
+    targetColorizationColor: str
+
+
 class RecentLogSummary(TypedDict):
     available: bool
     events: list[dict[str, object]]
@@ -185,6 +200,7 @@ class OverviewResult(OperationResult):
     profiles: dict[str, ProfileSummary]
     installBackup: BackupSummary
     task: TaskSummary
+    pendingTransactions: list[PendingAutoTransactionSummary]
     recentLog: RecentLogSummary
     dataRoot: str
     executable: str
@@ -197,6 +213,7 @@ class OverviewSections:
     profiles: dict[str, ProfileSummary]
     install_backup: BackupSummary
     task: TaskSummary
+    pending_transactions: list[PendingAutoTransactionSummary]
     warnings: tuple[str, ...]
 
 

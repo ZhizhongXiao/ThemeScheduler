@@ -56,8 +56,7 @@
           <section class="plan-view is-active" id="plan-overview-view" data-plan-view="overview">
             <section class="initial-setup-banner" id="initial-setup-banner" aria-live="polite" hidden>
               <span class="initial-setup-icon">1</span>
-              <div><h2>完成首次设置</h2><p>确认昼夜时间、两种模式、颜色及显示位置后保存，计划才会启用；不会立即改变 Windows 外观。</p></div>
-              <button class="button button-primary" id="initial-setup-button" type="button">设置计划</button>
+              <div><h2>完成首次设置</h2><p>通过右侧高亮的“设置计划”确认昼夜时间、模式、颜色及显示位置；保存后计划启用，不会立即改变 Windows 外观。</p></div>
             </section>
 
             <div class="overview-layout">
@@ -182,30 +181,50 @@
         <section class="tab-page" id="page-maintenance" role="tabpanel" aria-labelledby="tab-maintenance" data-page-panel="maintenance" hidden>
           <section class="panel" id="maintenance">
             <div class="panel-heading"><div><p class="section-index">维护</p><h2>任务与程序入口</h2><p class="hint" id="maintenance-health-summary">健康检查尚未运行</p></div></div>
-            <div class="maintenance-list two-columns">
-              <button class="list-action" id="reset-preferences-button" type="button"><span><strong>恢复默认时间与通知</strong><small>保留昼夜外观选择</small></span><b>→</b></button>
-              <button class="list-action" id="check-task-button" type="button"><span><strong>检查任务计划</strong><small>只读比较当前定义</small></span><b>→</b></button>
-              <button class="list-action" id="repair-task-button" type="button" data-interaction-contract="UI-013-01"><span><strong>修复任务计划</strong><small>按当前配置完整重建</small></span><b>→</b></button>
-              <button class="list-action span-two" id="repair-identity-button" type="button" data-interaction-contract="UI-013-01" hidden><span><strong>修复通知身份</strong><small id="repair-identity-hint">健康检查发现通知入口需要修复</small></span><b>→</b></button>
-              <button class="list-action" data-target="logs" type="button"><span><strong>打开日志目录</strong><small>查看结构化运行记录</small></span><b>↗</b></button>
-              <button class="list-action" data-target="data" type="button"><span><strong>打开数据目录</strong><small>配置、状态与颜色记录</small></span><b>↗</b></button>
-              <button class="list-action" id="uninstall-button" type="button"><span><strong>启动独立卸载器</strong><small>进入保留或清理选择</small></span><b>↗</b></button>
+            <div class="maintenance-groups">
+              <section class="maintenance-group" aria-labelledby="maintenance-plan-title">
+                <header class="maintenance-group-heading"><h3 id="maintenance-plan-title">计划与任务</h3><p>先检查当前定义；只有报告发现差异时才运行对应修复。</p></header>
+                <div class="maintenance-list">
+                  <button class="list-action" id="check-task-button" type="button"><span><strong>检查任务计划</strong><small>只读比较配置与 Windows 任务定义</small></span><b>→</b></button>
+                  <button class="list-action" id="repair-task-button" type="button" data-interaction-contract="UI-013-01"><span><strong>修复任务计划</strong><small>仅在检查发现差异后重建并验证</small></span><b>→</b></button>
+                  <button class="list-action" id="reset-preferences-button" type="button"><span><strong>恢复默认时间与通知</strong><small>设为 06:15 / 23:45；保留完整昼夜外观</small></span><b>→</b></button>
+                  <button class="list-action" id="repair-identity-button" type="button" data-interaction-contract="UI-013-01" hidden><span><strong>修复通知身份</strong><small id="repair-identity-hint">仅在健康检查建议时修复通知入口</small></span><b>→</b></button>
+                </div>
+              </section>
+              <section class="maintenance-group" aria-labelledby="maintenance-data-title">
+                <header class="maintenance-group-heading"><h3 id="maintenance-data-title">日志、数据与卸载</h3><p>用于查看本机记录、备份配置或进入卸载选项。</p></header>
+                <div class="maintenance-list">
+                  <button class="list-action" data-target="logs" type="button"><span><strong>打开日志目录</strong><small>查看自动运行、保存与修复事件</small></span><b>↗</b></button>
+                  <button class="list-action" data-target="data" type="button"><span><strong>打开数据目录</strong><small>只读查看配置、状态与昼夜记录</small></span><b>↗</b></button>
+                  <button class="list-action" id="uninstall-button" type="button"><span><strong>启动独立卸载器</strong><small>选择外观恢复、配置和日志保留方式</small></span><b>↗</b></button>
+                </div>
+              </section>
             </div>
+            <div class="maintenance-footer"><span id="data-root">数据目录：—</span><span>关闭窗口后程序不会驻留后台</span></div>
           </section>
         </section>
 
         <section class="tab-page" id="page-debug" role="tabpanel" aria-labelledby="tab-debug" data-page-panel="debug" hidden>
           <div class="debug-grid">
             <section class="panel"><div class="panel-heading"><div><p class="section-index">只读诊断</p><h2>完整健康检查</h2></div><div class="diagnostic-actions"><button class="button button-secondary compact" id="check-health-button" type="button">运行检查</button><button class="button button-secondary compact" id="copy-diagnostic-button" type="button">复制摘要</button></div></div><pre class="health-report" id="health-report">尚未运行健康检查。</pre></section>
-            <section class="panel recent-log-panel"><div class="panel-heading"><div><p class="section-index">最近事件</p><h2>结构化日志摘要</h2></div></div><pre class="health-report" id="recent-log-report">尚未读取。</pre></section>
+            <section class="panel recent-log-panel"><div class="panel-heading"><div><p class="section-index">运行记录</p><h2>最近事件</h2></div><button class="report-copy-button" type="button" data-copy-report="recent-log-report" aria-label="复制最近事件完整内容" title="复制完整内容"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="13" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2"></path></svg></button></div><pre class="health-report" id="recent-log-report">尚未读取。</pre></section>
           </div>
-          <details class="panel raw-details"><summary>查看任务定义</summary><pre class="health-report" id="task-report">尚未读取。</pre></details>
-          <details class="panel raw-details"><summary>查看状态与昼夜 profile</summary><pre class="health-report" id="state-profile-report">尚未读取。</pre></details>
-          <details class="panel raw-details"><summary>查看当前 Windows 外观来源</summary><pre class="health-report" id="appearance-report">尚未读取。</pre></details>
-          <details class="panel raw-details"><summary>查看当前 overview 原始数据</summary><pre class="health-report" id="overview-report">尚未读取。</pre></details>
+          <section class="panel debug-evidence-panel" aria-labelledby="debug-evidence-title">
+            <header class="debug-section-heading"><div><p class="section-index">按需展开</p><h2 id="debug-evidence-title">详细复核数据</h2></div><p>一般排查先看完整健康检查和最近事件；以下原始快照用于进一步定位。</p></header>
+            <div class="debug-evidence-grid">
+              <section class="debug-evidence-group" aria-labelledby="debug-schedule-evidence-title">
+                <header><h3 id="debug-schedule-evidence-title">计划与运行状态</h3><p>用于核对任务定义、暂停状态和昼夜 profile。</p></header>
+                <details class="raw-details"><summary><span>任务计划定义</span><button class="report-copy-button" type="button" data-copy-report="task-report" aria-label="复制任务计划定义完整内容" title="复制完整内容"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="13" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2"></path></svg></button></summary><pre class="health-report" id="task-report">尚未读取。</pre></details>
+                <details class="raw-details"><summary><span>状态与昼夜 profile</span><button class="report-copy-button" type="button" data-copy-report="state-profile-report" aria-label="复制状态与昼夜 profile 完整内容" title="复制完整内容"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="13" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2"></path></svg></button></summary><pre class="health-report" id="state-profile-report">尚未读取。</pre></details>
+              </section>
+              <section class="debug-evidence-group" aria-labelledby="debug-appearance-evidence-title">
+                <header><h3 id="debug-appearance-evidence-title">Windows 外观与完整状态</h3><p>用于比较实时外观来源，或检查完整工作台返回值。</p></header>
+                <details class="raw-details"><summary><span>当前 Windows 外观来源</span><button class="report-copy-button" type="button" data-copy-report="appearance-report" aria-label="复制 Windows 外观来源完整内容" title="复制完整内容"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="13" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2"></path></svg></button></summary><pre class="health-report" id="appearance-report">尚未读取。</pre></details>
+                <details class="raw-details"><summary><span>overview 原始数据</span><button class="report-copy-button" type="button" data-copy-report="overview-report" aria-label="复制 overview 原始数据完整内容" title="复制完整内容"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="13" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2"></path></svg></button></summary><pre class="health-report" id="overview-report">尚未读取。</pre></details>
+              </section>
+            </div>
+          </section>
         </section>
-
-        <footer><span id="data-root">数据目录：—</span><span>关闭窗口后程序不会驻留后台</span></footer>
       </div>
     </main>
 
