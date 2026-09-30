@@ -52,12 +52,14 @@ D-09 冻结后该值视为安装契约，不能在普通升级中变化。
 
 ```text
 scheduledAt - 5 minutes → 发送预通知并建立一次性动作 nonce
-scheduledAt             → 消费本次决定并执行、跳过或继续延迟
+scheduledAt             → 执行本次决定；SKIPPED 时保留 occurrence 抑制标记
+nextFixedAt             → 清理已 supersede 的 SKIPPED 标记并恢复下一周期
 ```
 
 预通知显示：
 
-- `跳过本次`：本次目标不应用，覆盖状态在边界运行时消费；
+- `跳过本次`：本次目标不应用；`SKIPPED` 标记保留到 `nextFixedAt`，同一 occurrence
+  的后续 auto 仍跳过，不得因重复任务启动或关闭状态通知而重新应用目标；
 - `延迟 30 分钟`：本次执行时间改为 `scheduledAt+30min`，并建立新的 `+25min` 预通知与 `+30min` 执行触发；
 - `确认`：保持原 `scheduledAt`，不立即切换；
 - 无操作：与确认相同，按原计划执行。

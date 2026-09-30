@@ -1,8 +1,8 @@
 # ThemeScheduler Windows 打包方案
 
-状态：`1.0.1` 维护版候选正在构建；目标正式目录为 `artifacts/releases/1.0.1`。其继承的 0.1.5 功能基线、
-动态主题兼容、607 项 release 门禁、双构建、Defender 和最终生命周期验收均已通过。
-后续候选仍只能写入 `artifacts/build/`，完整证据通过后才能进入正式发布目录。
+状态：`1.0.1` 尚无冻结候选或正式发布目录。最终源码身份必须重新完成
+integration、coverage、Coverage 棘轮、release 门禁、Windows CI、双构建和变更驱动验收；
+候选写入 `artifacts/build/`，完整证据通过后才能进入 `artifacts/releases/1.0.1`。
 每个版本的 `dist/` 只放用户分发文件，`evidence/` 保存发布清单、构建环境、
 测试/质量报告和展开载荷证据；根 `SHA256SUMS.txt` 绑定两部分。
 `0.1.1` 的经典 Setup/Uninstall、同版本修复、双配色与钟表边界、损坏卸载、
@@ -132,8 +132,10 @@ PyInstaller 打入的 pywebview 桥接 DLL 不等于 WebView2 Runtime。Setup、
 
 ## 8. 发布验收
 
-另一台无 Python 设备的可执行步骤、冻结哈希和只读证据采集入口统一见
-[TS-142 干净设备验收](../docs/CLEAN_MACHINE_ACCEPTANCE.md)。
+1.0.1 最终候选在另一台无 Python 设备上的可执行步骤和只读证据采集入口见
+[1.0.1 干净设备验收清单](../docs/CLEAN_MACHINE_ACCEPTANCE_1.0.1.md)。
+历史 `0.1.2` 证据仍保存在 [TS-142 清单](../docs/CLEAN_MACHINE_ACCEPTANCE.md)，
+不得把其中的旧版本路径或文件数用于 1.0.1。
 
 - 在干净 Windows 11 x64、普通当前用户和无 Python 环境中完成全新安装；
 - WebView2 已存在时 GUI 可启动；Runtime 缺失或检测失败时显示原生错误提示并停止启动，程序不运行 Runtime 安装程序；

@@ -2,10 +2,17 @@
 
 ## 1. 目标与范围
 
-本契约在 `0.1.5` 完整外观功能资格验收和 1.0 工程收口之后，生成面向 Windows 11
-x64、少量熟人分发的 `1.0.1` 维护版。该版本基于 `1.0.0`，包含通知消费清理、静态质量修复、完整外观重置保留、错误通知去重与日志轮转并发保护，以及迁移备份失败后的安全重试修复。
+本契约定义面向 Windows 11 x64、少量熟人分发的 `1.0.1` 维护版。该版本基于
+`1.0.0`，包含通知消费和迁移重试修复、Setup partial 结果传播、Queue/有限锁等待/
+future AutoRetry、SKIPPED occurrence 抑制、pending 与任务对账、主题应用及每次回滚的
+有界真实读回、昼夜循环间隔验证、事件日志落盘脱敏、PE 数值版本元数据校验，以及既定
+GUI、WebView2 文档和 Windows CI 收口。
 候选继续采用当前用户安装、单文件 Setup、
 `onedir` 主程序和独立单文件卸载器。目标设备不需要 Python、pip、uv 或虚拟环境。
+
+`1.0.1` 尚未冻结最终候选或正式发布。合并源码身份
+`3fd72090b577fc7f2c0d9dfbeecd86d095d23d89` 的 Windows CI 和 647 项 release gate
+只证明该身份；所有后续源码或发布文档变化都必须绑定新的完整报告、构建和验收证据。
 
 `0.1.5 RC2` 的自动门禁、双构建和 Defender 结果只证明功能候选；测试结构、类型
 配置、文档或任务桥一旦变化，旧报告和旧二进制不能为 1.0 背书。阶段顺序和完成定义
@@ -40,8 +47,11 @@ x64、少量熟人分发的 `1.0.1` 维护版。该版本基于 `1.0.0`，包含
 正式候选必须先执行：
 
 ```powershell
-uv sync --group build --group quality
+uv sync --locked --group build --group quality
 
+.venv\Scripts\python.exe tools\test.py integration
+uv run --locked --group quality python tools\test.py coverage
+uv run --locked --group quality python tools\coverage_guard.py check
 .venv\Scripts\python.exe tools\test.py release
 ```
 
@@ -108,8 +118,8 @@ Setup 与用户说明。`dist/RELEASE-README.md` 明确说明未签名状态、�
 
 候选安装前必须完成：
 
-1. 测试目录迁移后的一次 `integration`、`coverage`、Coverage 棘轮和最终 `release`
-   测试通过；
+1. 最终源码上依次完成 `integration`、`coverage`、`coverage_guard.py check` 和 `release`
+   测试；旧源码身份的报告不得复用；
 2. 两次构建的关键二进制及载荷清单哈希比较；
 3. 三个 EXE 均为 PE32+ x64、Windows GUI 子系统；
 4. 三个 EXE 的版本、说明、原始文件名和 CompanyName 精确读回；
@@ -145,8 +155,9 @@ Setup 与用户说明。`dist/RELEASE-README.md` 明确说明未签名状态、�
 当作降低验证标准的途径。
 
 阶段 9–10 已实机通过且本轮未改变语义的睡眠、关机、静默边界、通知按钮 nonce
-和健康入口不机械重跑，由完整自动回归和历史证据承接。详细批次见
-[CLEAN_MACHINE_ACCEPTANCE.md](CLEAN_MACHINE_ACCEPTANCE.md)。
+和健康入口不机械重跑，由完整自动回归和历史证据承接。1.0.1 最终候选步骤见
+[CLEAN_MACHINE_ACCEPTANCE_1.0.1.md](CLEAN_MACHINE_ACCEPTANCE_1.0.1.md)；旧版
+TS-142 的 `0.1.2` 记录保存在 [CLEAN_MACHINE_ACCEPTANCE.md](CLEAN_MACHINE_ACCEPTANCE.md)。
 
 最好在另一台干净 Windows 11 x64 设备完成首次安装和无 Python 验证；若只在
 开发机验收，发布记录必须明确标为“开发机当前用户生命周期验证”，不得写成

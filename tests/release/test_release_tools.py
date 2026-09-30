@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import struct
 import subprocess
 import sys
@@ -153,6 +154,52 @@ class ReleaseConfigurationTests(unittest.TestCase):
                 PROJECT_ROOT,
                 "0.0.0",
             )
+
+    def test_release_validator_rejects_fixed_file_info_version_drift(self) -> None:
+        version = "1.0.1"
+        expected_fixed = (1, 0, 1, 0)
+        version_fields = ("filevers", "prodvers")
+
+        for relative in RELEASE_TOOLS.VERSION_RESOURCES.values():
+            for field in version_fields:
+                with (
+                    self.subTest(resource=relative, field=field),
+                    tempfile.TemporaryDirectory() as directory,
+                ):
+                    root = Path(directory)
+                    (root / "pyproject.toml").write_text(
+                        '[project]\nname = "themescheduler"\nversion = "1.0.1"\n',
+                        encoding="utf-8",
+                    )
+                    (root / "MANIFEST.in").write_text("", encoding="utf-8")
+
+                    for resource_path in RELEASE_TOOLS.VERSION_RESOURCES.values():
+                        source_path = PROJECT_ROOT / resource_path
+                        text = source_path.read_text(encoding="utf-8")
+                        for version_field in version_fields:
+                            text = re.sub(
+                                rf"(?m)^(\s*{version_field}\s*=\s*)\([^)]*\)",
+                                rf"\g<1>{expected_fixed!r}",
+                                text,
+                                count=1,
+                            )
+                        if resource_path == relative:
+                            text = re.sub(
+                                rf"(?m)^(\s*{field}\s*=\s*)\([^)]*\)",
+                                r"\g<1>(1, 0, 0, 0)",
+                                text,
+                                count=1,
+                            )
+                        destination = root / resource_path
+                        destination.parent.mkdir(parents=True, exist_ok=True)
+                        destination.write_text(text, encoding="utf-8")
+
+                    icon = root / "assets" / "ThemeScheduler.ico"
+                    icon.parent.mkdir(parents=True, exist_ok=True)
+                    icon.write_bytes(struct.pack("<HHH", 0, 1, 7))
+
+                    with self.assertRaisesRegex(ValueError, "numeric"):
+                        RELEASE_TOOLS.validate_release_configuration(root, version)
 
     def test_manifest_configuration_rejects_missing_include(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

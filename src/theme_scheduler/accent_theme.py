@@ -751,6 +751,7 @@ def _poll_theme_visual_state(
     timeout_seconds: float,
     poll_interval_seconds: float,
     operation_deadline: float,
+    require_exact_target_index: bool = False,
 ) -> tuple[Path, ThemeVisualState, int, dict[str, object]]:
     started_at = _verification_timestamp()
     started_monotonic = time.monotonic()
@@ -789,14 +790,21 @@ def _poll_theme_visual_state(
             )
             sample["currentIndex"] = current_index
             sample["customIndex"] = custom_index
-            try:
-                _verify_current_index(
-                    target_index=target_index,
-                    current_index=current_index,
-                    custom_index=custom_index,
-                )
-            except ThemeFileError as exc:
-                failures.append(str(exc))
+            if require_exact_target_index:
+                if current_index != target_index:
+                    failures.append(
+                        f"Current theme index {current_index} did not match "
+                        f"required index {target_index}."
+                    )
+            else:
+                try:
+                    _verify_current_index(
+                        target_index=target_index,
+                        current_index=current_index,
+                        custom_index=custom_index,
+                    )
+                except ThemeFileError as exc:
+                    failures.append(str(exc))
         except Exception as exc:
             failures.append(f"Theme index read failed: {exc}")
 
@@ -881,6 +889,7 @@ def _try_restore_original_index(
     settle_seconds: float,
     visual_state_reader: Callable[[], ThemeVisualState] | None,
     timeout_seconds: float,
+    poll_interval_seconds: float,
 ) -> bool:
     deadline = time.monotonic() + timeout_seconds
     remaining = deadline - time.monotonic()
@@ -893,16 +902,18 @@ def _try_restore_original_index(
         ):
             return False
         _settle_before_deadline(settle_seconds, deadline)
-        _, actual = _read_active_visual_state(backend, visual_state_reader)
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            return False
-        current_index, _ = backend.current_v2_indices(timeout_seconds=remaining)
-        return (
-            current_index == index_before
-            and time.monotonic() <= deadline
-            and not _visual_state_failures(actual, before)
+        _poll_theme_visual_state(
+            backend,
+            before,
+            visual_state_reader=visual_state_reader,
+            target_index=index_before,
+            index_before=index_before,
+            timeout_seconds=timeout_seconds,
+            poll_interval_seconds=poll_interval_seconds,
+            operation_deadline=deadline,
+            require_exact_target_index=True,
         )
+        return time.monotonic() <= deadline
     except Exception:
         return False
 
@@ -911,10 +922,12 @@ def _try_restore_theme_backup(
     backend: ThemeApplyV2Backend,
     rollback_path: Path,
     *,
+    index_before: int,
     before: ThemeVisualState,
     settle_seconds: float,
     visual_state_reader: Callable[[], ThemeVisualState] | None,
     timeout_seconds: float,
+    poll_interval_seconds: float,
 ) -> bool:
     deadline = time.monotonic() + timeout_seconds
     remaining = deadline - time.monotonic()
@@ -926,18 +939,17 @@ def _try_restore_theme_backup(
             timeout_seconds=remaining,
         )
         _settle_before_deadline(settle_seconds, deadline)
-        _, actual = _read_active_visual_state(backend, visual_state_reader)
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            return False
-        current_index, custom_index = backend.current_v2_indices(
-            timeout_seconds=remaining
+        _poll_theme_visual_state(
+            backend,
+            before,
+            visual_state_reader=visual_state_reader,
+            target_index=target_index,
+            index_before=index_before,
+            timeout_seconds=timeout_seconds,
+            poll_interval_seconds=poll_interval_seconds,
+            operation_deadline=deadline,
         )
-        return (
-            current_index in {target_index, custom_index}
-            and time.monotonic() <= deadline
-            and not _visual_state_failures(actual, before)
-        )
+        return time.monotonic() <= deadline
     except Exception:
         return False
 
@@ -951,6 +963,7 @@ def _rollback_theme_v2(
     settle_seconds: float,
     visual_state_reader: Callable[[], ThemeVisualState] | None,
     timeout_seconds: float,
+    poll_interval_seconds: float,
 ) -> bool:
     if _try_restore_original_index(
         backend,
@@ -959,15 +972,18 @@ def _rollback_theme_v2(
         settle_seconds=settle_seconds,
         visual_state_reader=visual_state_reader,
         timeout_seconds=timeout_seconds,
+        poll_interval_seconds=poll_interval_seconds,
     ):
         return True
     return rollback_path is not None and _try_restore_theme_backup(
         backend,
         rollback_path,
+        index_before=index_before,
         before=before,
         settle_seconds=settle_seconds,
         visual_state_reader=visual_state_reader,
         timeout_seconds=timeout_seconds,
+        poll_interval_seconds=poll_interval_seconds,
     )
 
 
@@ -1048,6 +1064,7 @@ def apply_and_verify_theme_v2(
             settle_seconds=settle_seconds,
             visual_state_reader=visual_state_reader,
             timeout_seconds=rollback_timeout_seconds,
+            poll_interval_seconds=verification_poll_interval_seconds,
         )
         raise LiveThemeApplyError(
             f"Managed theme V2 apply failed: {exc}",

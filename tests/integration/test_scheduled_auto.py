@@ -39,6 +39,7 @@ from theme_scheduler.storage import UserDataLayout
 from theme_scheduler.switch_override import (
     PendingSwitch,
     PendingSwitchStore,
+    SwitchDecision,
 )
 
 UTC8 = timezone(timedelta(hours=8))
@@ -897,8 +898,87 @@ class ScheduledAutoTests(unittest.TestCase):
 
             self.assertIs(outcome.result, ScheduledRunKind.SKIPPED)
             self.assertEqual(core.calls, 0)
-            self.assertFalse(layout.pending_switch.exists())
+            self.assertTrue(layout.pending_switch.exists())
+            self.assertIs(
+                PendingSwitchStore(layout.pending_switch).load().decision,
+                SwitchDecision.SKIPPED,
+            )
             self.assertEqual(notifier.prepare_clears, 1)
+
+    def test_repeated_auto_keeps_skip_suppression_until_next_fixed_boundary(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            layout = self._layout(Path(raw))
+            scheduled = datetime(2026, 7, 26, 6, 15, tzinfo=UTC8)
+            next_fixed = datetime(2026, 7, 26, 23, 45, tzinfo=UTC8)
+            pending = (
+                PendingSwitch.create(
+                    target_profile="day",
+                    scheduled_at=scheduled,
+                    next_fixed_at=next_fixed,
+                    now=scheduled - timedelta(minutes=5),
+                )
+                .arm(now=scheduled - timedelta(minutes=5), token=TOKEN)
+                .apply_action(
+                    NotificationAction.SKIP,
+                    token=TOKEN,
+                    now=scheduled - timedelta(minutes=4),
+                )
+            )
+            PendingSwitchStore(layout.pending_switch).create(pending)
+            core = StubCore()
+
+            first = self._coordinator(layout, scheduled, core=core).run()
+            repeated = self._coordinator(
+                layout,
+                scheduled + timedelta(minutes=1),
+                core=core,
+            ).run()
+
+            self.assertIs(first.result, ScheduledRunKind.SKIPPED)
+            self.assertIs(repeated.result, ScheduledRunKind.SKIPPED)
+            self.assertEqual(core.calls, 0)
+            self.assertTrue(layout.pending_switch.exists())
+
+            next_cycle = self._coordinator(
+                layout,
+                next_fixed,
+                core=core,
+            ).run()
+
+            self.assertIs(next_cycle.result, ScheduledRunKind.CORE)
+            self.assertEqual(core.calls, 1)
+            self.assertFalse(layout.pending_switch.exists())
+
+    def test_disabled_notifications_do_not_delete_skipped_occurrence_marker(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            layout = self._layout(Path(raw), notifications=False)
+            scheduled = datetime(2026, 7, 26, 6, 15, tzinfo=UTC8)
+            pending = (
+                PendingSwitch.create(
+                    target_profile="day",
+                    scheduled_at=scheduled,
+                    next_fixed_at=datetime(2026, 7, 26, 23, 45, tzinfo=UTC8),
+                    now=scheduled - timedelta(minutes=5),
+                )
+                .arm(now=scheduled - timedelta(minutes=5), token=TOKEN)
+                .apply_action(
+                    NotificationAction.SKIP,
+                    token=TOKEN,
+                    now=scheduled - timedelta(minutes=4),
+                )
+            )
+            PendingSwitchStore(layout.pending_switch).create(pending)
+            core = StubCore()
+
+            outcome = self._coordinator(layout, scheduled, core=core).run()
+
+            self.assertIs(outcome.result, ScheduledRunKind.SKIPPED)
+            self.assertEqual(core.calls, 0)
+            self.assertTrue(layout.pending_switch.exists())
 
     def test_missed_prepare_after_boundary_runs_core_without_stale_notice(
         self,

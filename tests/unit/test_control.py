@@ -124,6 +124,10 @@ class ControlServiceTests(unittest.TestCase):
             clock=FakeClock(),
         )
 
+    def test_timestamp_rejects_naive_clock_values(self) -> None:
+        with self.assertRaisesRegex(ValueError, "UTC offset"):
+            ControlService._timestamp(datetime(2026, 7, 24, 12, 0))
+
     def test_pause_resume_persist_and_preserve_history(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             layout = self._layout(Path(directory))

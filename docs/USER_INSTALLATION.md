@@ -6,7 +6,9 @@
 计划和事务实现细节分别见 [Windows 打包方案](../packaging/README.md) 与
 [安装生命周期契约](INSTALLATION.md)。
 
-本指南功能说明对应 `1.0.1` 维护版候选；正式分发版本仍以发布目录和 GitHub Release 为准。支持 Windows 11 x64，按当前用户安装：
+本指南描述当前安装行为。正式可下载版本以
+[GitHub 最新正式 Release](https://github.com/ZhizhongXiao/ThemeScheduler/releases/latest)
+为准；`1.0.1` 尚未正式发布。支持 Windows 11 x64，按当前用户安装：
 
 - 不要求预装 Python、uv、虚拟环境或 pywebview；
 - 通常不要求管理员权限；
@@ -16,13 +18,11 @@
 
 ## 2. 获取与安全验证
 
-正式安装器位于发布目录：
+从 GitHub 正式 Release 下载 `ThemeScheduler-Setup.exe`、`RELEASE-README.md` 和
+`SHA256SUMS.txt`。候选目录不是正式下载源；`artifacts/releases/1.0.1/` 仅在
+1.0.1 完成冻结和正式发布后使用。
 
-```text
-artifacts/releases/1.0.1/dist/ThemeScheduler-Setup.exe
-```
-
-正式 SHA-256 以同目录的 `SHA256SUMS.txt` 为准，不从历史说明复制旧版本哈希。
+正式 SHA-256 以同一 Release 的 `SHA256SUMS.txt` 为准，不从历史说明复制旧版本哈希。
 
 可在安装器所在目录打开 PowerShell 并运行：
 
@@ -182,5 +182,5 @@ Windows 可能把通知直接归集到通知中心，这与专注模式、通知
 - 不接管壁纸、声音、鼠标指针、桌面图标或 Windows 色温夜间模式；
 - 强调色切换依赖已在目标 Windows 11 验证、但未公开的主题管理接口；
 - 当前没有 Authenticode 签名和后台自动更新；
-- `0.1.2` 已在另一台无 Python 的 Windows x64 设备完成安装、计划边界、升级和
-  独立卸载验收；单台设备结果不代表所有 Windows 11 组合。
+- 历史 `0.1.2` 已在另一台无 Python 的 Windows x64 设备完成安装、计划边界、升级和
+  独立卸载验收；这不替代 `1.0.1` 最终候选的变更驱动验收，也不代表所有 Windows 11 组合。

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -200,6 +201,28 @@ class WindowsNotificationBackendTests(unittest.TestCase):
         self.assertIn("ToastNotificationManager]::History", script)
         self.assertIn("$history.Remove", script)
         self.assertNotIn("CoRegisterClassObject", script)
+
+    def test_missing_bridge_and_powershell_are_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            missing_bridge = WindowsNotificationBackend(Path(directory) / "missing.ps1")
+            with self.assertRaisesRegex(WindowsNotificationError, "bridge is missing"):
+                missing_bridge._resolve_bridge()
+
+        with (
+            patch.dict("os.environ", {"SYSTEMROOT": directory}),
+            self.assertRaisesRegex(
+                WindowsNotificationError,
+                "Windows PowerShell is missing",
+            ),
+        ):
+            WindowsNotificationBackend._resolve_powershell()
+
+    def test_run_rejects_non_windows_platform(self) -> None:
+        with (
+            patch("theme_scheduler.notifications_windows.os.name", "posix"),
+            self.assertRaisesRegex(OSError, "require Windows"),
+        ):
+            self.backend._run("Probe")
 
 
 if __name__ == "__main__":
