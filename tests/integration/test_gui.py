@@ -876,7 +876,7 @@ class GuiAssetsAndRuntimeTests(unittest.TestCase):
 
             ShellActions(layout, executable).open("uninstaller")
 
-            startfile.assert_called_once_with(str(uninstaller))
+            startfile.assert_called_once_with(str(uninstaller.resolve()))
 
     def test_frontend_is_local_and_references_only_packaged_assets(self) -> None:
         entry = frontend_entry()

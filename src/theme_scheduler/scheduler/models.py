@@ -129,7 +129,7 @@ class TaskPrincipal:
 class TaskSettings:
     start_when_available: bool = True
     wake_to_run: bool = False
-    multiple_instances: str = "IgnoreNew"
+    multiple_instances: str = "Queue"
     allow_start_on_batteries: bool = True
     stop_if_going_on_batteries: bool = False
     run_only_if_network_available: bool = False

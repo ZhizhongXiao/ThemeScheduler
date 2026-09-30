@@ -31,6 +31,8 @@ class ScriptedThemeApplyV2Backend:
         self.set_result_override: int | None = None
         self.failures: dict[str, list[Exception | None]] = {}
         self.calls: list[tuple[str, object | None]] = []
+        self.bridge_budgets: list[float | None] = []
+        self.apply_budgets: list[float | None] = []
 
     def fail_next(self, operation: str, error: Exception) -> None:
         self.failures.setdefault(operation, []).append(error)
@@ -51,18 +53,31 @@ class ScriptedThemeApplyV2Backend:
         self._raise_if_scripted("current_theme_path")
         return self.active
 
-    def current_v2_index(self) -> int:
+    def current_v2_index(self, *, timeout_seconds: float | None = None) -> int:
         self.calls.append(("current_v2_index", None))
+        self.bridge_budgets.append(timeout_seconds)
         self._raise_if_scripted("current_v2_index")
         return self.index
 
-    def current_v2_indices(self) -> tuple[int, int]:
+    def current_v2_indices(
+        self,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> tuple[int, int]:
         self.calls.append(("current_v2_indices", None))
+        self.bridge_budgets.append(timeout_seconds)
         self._raise_if_scripted("current_v2_indices")
         return self.current_indices_override or (self.index, self.custom_index)
 
-    def apply_theme_v2(self, path: Path) -> tuple[int, int]:
+    def apply_theme_v2(
+        self,
+        path: Path,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> tuple[int, int]:
         self.calls.append(("apply_theme_v2", path))
+        self.bridge_budgets.append(timeout_seconds)
+        self.apply_budgets.append(timeout_seconds)
         self._raise_if_scripted("apply_theme_v2")
         self.apply_count += 1
         before = self.index if self.bridge_before is None else self.bridge_before
@@ -78,8 +93,14 @@ class ScriptedThemeApplyV2Backend:
         )
         return before, self.target_index
 
-    def set_v2_index(self, index: int) -> int:
+    def set_v2_index(
+        self,
+        index: int,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> int:
         self.calls.append(("set_v2_index", index))
+        self.bridge_budgets.append(timeout_seconds)
         self._raise_if_scripted("set_v2_index")
         self.index = index
         if self.restore_original_on_set:

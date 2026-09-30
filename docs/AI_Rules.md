@@ -103,7 +103,7 @@ Windows 设置仍是用户手动选择主题和强调色的正式入口。程序
 - 在源码 GUI 中省略显式数据根，或在没有额外实机开关和明确可执行文件时允许任务/Windows 写入。
 - 写入 Windows 系统目录，或无必要地要求管理员权限。
 - 关闭或绕过 Defender、SmartScreen，或自动创建安全排除项。
-- 使用 UPX、代码混淆、隐藏命令、动态下载并执行应用代码等发布手段；经用户确认和 Microsoft 签名验证的 WebView2 Evergreen 系统依赖安装是唯一冻结例外。
+- 不使用 UPX、代码混淆、隐藏命令或动态下载并执行应用代码等发布手段。
 - 修改无关文件，或删除用户配置、备份、日志及构建资源而不确认范围。
 
 ## Windows 操作安全
@@ -221,7 +221,7 @@ Windows 设置仍是用户手动选择主题和强调色的正式入口。程序
 - 卸载的“恢复接管前应用模式和强调色”和“保持当前外观”两条路径都符合选择，且均保持 Windows 系统模式。
 - 目标设备无需预装 Python。
 - 正式主程序保持 PyInstaller `onedir`；单文件形态仅用于 Setup 和不依赖主 `_internal` 的独立卸载器。
-- WebView2 Runtime 在 GUI 启动前被检测，缺失时通过 Evergreen 路径明确修复且不降级到 MSHTML。
+- Setup、主 GUI 和卸载 GUI 在导入 pywebview 前检测 WebView2 Runtime；缺失或检测失败时显示原生错误提示并停止启动，用户需另行安装后重试，且不降级到 MSHTML。
 - `pyproject.toml`、`uv.lock`、锁定工具版本和发布哈希能够复现候选版本。
 
 ## 文档一致性

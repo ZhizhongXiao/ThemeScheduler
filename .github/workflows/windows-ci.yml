@@ -1,0 +1,40 @@
+name: ThemeScheduler
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  windows-ci:
+    name: Windows CI
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.12 x64
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          architecture: x64
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+
+      - name: Install locked project dependencies
+        run: uv sync --locked --group build --group quality
+        shell: pwsh
+
+      - name: Run release gate
+        run: .venv\Scripts\python.exe tools\test.py release
+        shell: pwsh

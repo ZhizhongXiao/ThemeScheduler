@@ -14,10 +14,12 @@ WAIT_ABANDONED = 0x00000080
 WAIT_TIMEOUT = 0x00000102
 WAIT_FAILED = 0xFFFFFFFF
 _MUTEX_NAME_PATTERN = re.compile(
-    r"Local\\ThemeScheduler\.(?:Auto|Lifecycle|NotificationDedup|EventLog)\."
+    r"Local\\ThemeScheduler\.(?:Auto|Lifecycle|NotificationDedup|EventLog|SchedulerMutation)\."
     r"[0-9a-f]{24}\Z"
 )
-_MUTEX_PURPOSES = frozenset({"Auto", "Lifecycle", "NotificationDedup", "EventLog"})
+_MUTEX_PURPOSES = frozenset(
+    {"Auto", "Lifecycle", "NotificationDedup", "EventLog", "SchedulerMutation"}
+)
 
 
 class MutexApi(Protocol):

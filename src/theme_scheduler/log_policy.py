@@ -6,7 +6,7 @@ import json
 import os
 import re
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Protocol
@@ -31,6 +31,14 @@ LOG_TRIGGERS = frozenset(
     {"auto", "manual", "install", "upgrade", "uninstall", "repair", "system"}
 )
 _EVENT_PATTERN = re.compile(r"[a-z0-9]+(?:[.-][a-z0-9]+)*")
+_EMAIL_PATTERN = re.compile(
+    r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",
+    re.IGNORECASE,
+)
+_WINDOWS_USER_PATH_PATTERN = re.compile(
+    r"(?:[A-Z]:\\Users\\[^\r\n<>\"]+|\\\\[^\\\s]+\\[^\\\s]+\\Users\\[^\r\n<>\"]+)",
+    re.IGNORECASE,
+)
 
 
 class LogEventValidationError(DataError):
@@ -227,8 +235,13 @@ class EventLogWriter:
             os.replace(self.path, self._backup_path(1))
 
     def append(self, event: LogEvent) -> Path:
+        persisted_event = (
+            replace(event, message=_sanitize_persisted_message(event.message))
+            if event.message is not None
+            else event
+        )
         payload = json.dumps(
-            event.as_dict(),
+            persisted_event.as_dict(),
             ensure_ascii=False,
             separators=(",", ":"),
             sort_keys=True,
@@ -252,3 +265,16 @@ class EventLogWriter:
         finally:
             lock.release()
         return self.path
+
+
+def _sanitize_persisted_message(message: str) -> str:
+    normalized = "".join(
+        " " if ord(character) < 32 or ord(character) == 127 else character
+        for character in message
+    )
+    without_emails = _EMAIL_PATTERN.sub("[redacted-email]", normalized)
+    without_user_paths = _WINDOWS_USER_PATH_PATTERN.sub(
+        "[redacted-path]",
+        without_emails,
+    )
+    return without_user_paths[:500]

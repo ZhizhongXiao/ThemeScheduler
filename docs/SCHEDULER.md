@@ -78,7 +78,7 @@ WorkingDirectory = <绝对安装目录>
 | 运行级别 | `LeastPrivilege` |
 | 错过后补运行 | 开启 |
 | 唤醒设备 | 关闭 |
-| 多实例 | `IgnoreNew` |
+| 多实例 | `Queue` |
 | 电池供电启动 | 允许 |
 | 转为电池供电后停止 | 关闭 |
 | 需要网络 | 否 |
@@ -87,7 +87,11 @@ WorkingDirectory = <绝对安装目录>
 
 交互式当前用户上下文是主题应用的必要边界；第一版不保存用户密码，不在未登录会话中运行，也不申请管理员权限。
 
-若 Windows 对同一任务的多个错过触发器进行合并或连续补运行，`auto` 都按实际启动时间计算目标。任务级 `IgnoreNew` 与阶段 4 当前会话命名互斥体共同抑制并发；重复成功启动仍由核心幂等规则收敛。
+Task Scheduler 按 `Queue` 在当前实例结束后启动排队实例，并在五分钟执行上限时终止超时任务。scheduled auto 最多等待主互斥体 30 秒；锁争用或明确的调度器临时故障会安排 future AutoRetry。`auto` 始终按实际启动时间计算目标。
+
+主互斥体超时后，本次 auto 放弃核心处理，确认未持有主锁，再单独取得 scheduler-mutation 互斥体安排一次性 `AutoRetry`；这条路径不再尝试主锁。正常写操作按 execution mutex → scheduler-mutation mutex 的顺序取锁。已有 `start_at > now` 的 Retry 会原样保留；没有未来预约时，以 `ceil_to_whole_minute(now + 1 minute)` 创建新预约。过期 Retry 不作为恢复保障。主题应用或验证失败（包括已验证回滚成功）、不可信数据和未验证成功的回滚均不安排 Retry。
+
+期望 TaskSpec 只接受四种精确触发器集合：四个固定触发器；固定触发器加 `AutoRetry`；固定触发器加完整 `DeferredPrepare`/`DeferredBoundary` 对；或固定触发器加延后对和 `AutoRetry`。只有 `defer_count > 0` 且决策不是 `SKIPPED` 时才派生延后对。auto 持锁后严格读取 pending，先清理已到 `nextFixedAt` 的旧 pending，再派生期望任务并对账，最后才处理 WAIT、APPLY 或 SKIP。
 
 ## 5. 时间语义
 

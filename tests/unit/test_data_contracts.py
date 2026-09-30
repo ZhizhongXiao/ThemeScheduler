@@ -140,6 +140,23 @@ class ConfigContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ConfigValidationError, "must differ"):
             AppConfig("06:15", "06:15", "light", "dark", True, True)
 
+    def test_day_night_circular_distance_must_be_greater_than_five_minutes(
+        self,
+    ) -> None:
+        for day, night in (("06:00", "06:05"), ("23:58", "00:03")):
+            with (
+                self.subTest(day=day, night=night),
+                self.assertRaises(ConfigValidationError),
+            ):
+                AppConfig(day, night, "light", "dark", True, True)
+
+        for day, night in (("06:00", "06:06"), ("23:58", "00:04")):
+            with self.subTest(day=day, night=night):
+                self.assertEqual(
+                    AppConfig(day, night, "light", "dark", True, True).day_start,
+                    day,
+                )
+
     def test_complete_appearance_fields_are_strict_and_profile_scoped(self) -> None:
         config = AppConfig.defaults()
         self.assertEqual(
@@ -755,6 +772,34 @@ class LogPolicyTests(unittest.TestCase):
                         LogEvent.from_dict(json.loads(line)).as_dict(),
                         json.loads(line),
                     )
+
+    def test_writer_sanitizes_persisted_copy_without_mutating_event(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "events.jsonl"
+            message = (
+                "contact alice@example.com at "
+                r"C:\Users\Alice\AppData\Local\private.txt"
+                "\r\n" + "x" * 600
+            )
+            event = LogEvent(
+                occurred_at="2026-07-23T21:00:00+08:00",
+                level="ERROR",
+                event="config.load",
+                result="failed",
+                trigger="auto",
+                message=message[:500],
+            )
+
+            EventLogWriter(path).append(event)
+
+            persisted = json.loads(path.read_text(encoding="utf-8").splitlines()[0])
+            persisted_message = persisted["message"]
+            self.assertEqual(event.message, message[:500])
+            self.assertLessEqual(len(persisted_message), 500)
+            self.assertNotIn("alice@example.com", persisted_message)
+            self.assertNotIn(r"C:\Users\Alice", persisted_message)
+            self.assertNotIn("\r", persisted_message)
+            self.assertNotIn("\n", persisted_message)
 
     def test_concurrent_writers_serialize_rotation_and_preserve_records(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

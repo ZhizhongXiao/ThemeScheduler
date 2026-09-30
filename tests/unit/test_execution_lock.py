@@ -136,7 +136,7 @@ class WindowsNamedMutexLockTests(unittest.TestCase):
             ).name,
             lifecycle,
         )
-        for purpose in ("NotificationDedup", "EventLog"):
+        for purpose in ("NotificationDedup", "EventLog", "SchedulerMutation"):
             name = named_mutex_name_for_path(Path("data"), purpose=purpose)
             self.assertTrue(name.startswith(f"Local\\ThemeScheduler.{purpose}."))
             self.assertEqual(

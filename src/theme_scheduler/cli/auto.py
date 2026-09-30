@@ -115,6 +115,7 @@ def create_live_auto_runner(
     layout: UserDataLayout,
     *,
     decision_time: datetime | None = None,
+    scheduled: bool = False,
 ) -> tuple[AutoRunner, str]:
     """Build the verified live runner used by scheduled automatic entries."""
 
@@ -123,7 +124,10 @@ def create_live_auto_runner(
     mutex_name = mutex_name_for_data_root(layout.root)
     runner = AutoRunner(
         layout,
-        WindowsNamedMutexLock(mutex_name),
+        WindowsNamedMutexLock(
+            mutex_name,
+            wait_timeout_ms=30_000 if scheduled else None,
+        ),
         WindowsAutoBackend(layout, windows_build=windows_build),
         clock=(_FixedClock(decision_time) if decision_time is not None else None),
     )
@@ -187,7 +191,7 @@ def create_live_scheduled_coordinator(layout: UserDataLayout):
     from ..scheduled_auto import ScheduledAutoCoordinator
     from ..scheduler_windows import WindowsTaskSchedulerBackend
 
-    runner, mutex_name = create_live_auto_runner(layout)
+    runner, mutex_name = create_live_auto_runner(layout, scheduled=True)
     tasks = WindowsTaskSchedulerBackend()
     user_id = tasks.current_user_id()
     notifier = WindowsNotificationBackend()

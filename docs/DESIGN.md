@@ -554,7 +554,7 @@ GUI 模块必须延迟导入。任务计划调用 `ThemeScheduler.exe auto` 时�
 - 不唤醒计算机；
 - 错过计划后尽快运行；
 - 使用交互式用户令牌和最低权限，只在该用户登录时运行；
-- 使用 `IgnoreNew` 多实例策略，允许电池供电运行，不依赖网络；
+- 使用 `Queue` 多实例策略和五分钟执行上限，允许电池供电运行，不依赖网络；
 - 不添加登录、解锁、系统恢复或周期轮询触发器；
 - 支持创建、更新时间、检查、禁用和删除；
 - 延后触发器只能成对出现，必须与可信 `pending-switch` 状态一致，消费或过期后整体删除；
@@ -574,8 +574,8 @@ GUI 模块必须延迟导入。任务计划调用 `ThemeScheduler.exe auto` 时�
 
 安装器按以下顺序执行：
 
-1. 使用原生 Windows 界面校验系统支持范围、WebView2 Runtime 和目标目录。
-2. WebView2 缺失时，经用户知情并验证 Microsoft Authenticode 签名后运行随安装器提供的 Evergreen Bootstrapper；离线包可提供 Standalone Installer。失败则停止，不降级到 MSHTML。
+1. Setup、主 GUI 和卸载 GUI 在导入 pywebview 前检测 WebView2 Runtime。
+2. Runtime 缺失或检测失败时显示原生错误提示并停止启动；用户需另行安装 Microsoft Edge WebView2 Runtime 后重试，不降级到 MSHTML。
 3. 在首次修改前捕获安装前个性化设置并安全保存。
 4. 把正式 `onedir` 主程序和独立卸载器解包到 `.staging-<事务>`，按载荷清单逐文件验证后切换到正式路径。
 5. 创建初始配置、状态和两份强调色快照。
@@ -700,7 +700,7 @@ ThemeScheduler 只负责计划中的 Windows 模式、默认应用模式、强�
 
 - 不关闭或绕过 Defender、SmartScreen。
 - 不自动创建 Defender 排除项。
-- 不使用 UPX、代码混淆、Base64 隐藏命令或动态下载并执行应用代码；经用户确认和签名验证的微软 WebView2 Evergreen 系统依赖安装除外。
+- 不使用 UPX、代码混淆、Base64 隐藏命令或动态下载并执行应用代码。
 - 不使用不必要的管理员权限，不写入 Windows 系统目录。
 - 只修改当前用户范围设置。
 - 使用稳定的程序名称、图标、版本和发布者元数据。
@@ -709,7 +709,7 @@ ThemeScheduler 只负责计划中的 Windows 模式、默认应用模式、强�
 - 正式主程序采用 PyInstaller `onedir`；单文件只用于 GUI 安装器和独立卸载器。
 - pywebview 只加载本地资源，固定使用 Edge Chromium，不静默降级到旧渲染器。
 
-ThemeScheduler 1.0 自有可执行文件不采用 Authenticode 签名，适用场景限定为向少量熟人分发。安装器必须明确说明未经签名的新可执行文件可能触发 SmartScreen，并随发布物提供 SHA-256、载荷清单、固定版本/发布者元数据和可复现构建记录；不得通过降低系统安全级别处理误报。这里不改变 WebView2 依赖的信任要求：随包运行的 Microsoft Evergreen 安装程序仍必须验证其 Microsoft Authenticode 签名。
+ThemeScheduler 1.0 自有可执行文件不采用 Authenticode 签名，适用场景限定为向少量熟人分发。安装器必须明确说明未经签名的新可执行文件可能触发 SmartScreen，并随发布物提供 SHA-256、载荷清单、固定版本/发布者元数据和可复现构建记录；不得通过降低系统安全级别处理误报。WebView2 Runtime 由用户另行安装，程序不附带或运行其安装程序。
 
 正式候选还必须把 release 全量测试报告绑定到同一源码身份，不能使用旧报告为后续修改背书。无 Git 仓库时，源码身份由受控项目文件的规范路径、大小和逐文件 SHA-256 计算；候选记录同时保存 Python、uv、PyInstaller、pywebview、Windows 构建、`uv.lock`、载荷清单和三个 EXE 的哈希及 PE 属性。详细门槛见 [RELEASE.md](RELEASE.md)。
 

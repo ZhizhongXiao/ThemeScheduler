@@ -100,7 +100,7 @@ artifacts/releases/<版本>/
 
 `ThemeScheduler.exe` 是统一入口：无参数启动按需 GUI，`auto` 保持任务计划契约，`maintenance` 打开轻量维护区。GUI 依赖延迟加载，`auto` 不初始化 pywebview。使用 `onedir` 可以避免计划任务每次运行时解压到临时目录，并使启动路径、依赖位置和升级边界更稳定。单文件形态用于安装器分发和必须独立于主 `onedir` 损坏面的卸载器，不用于自动任务或日常 GUI。
 
-GUI 使用 pywebview 的 Edge Chromium 后端和本地前端资源，不允许 MSHTML 回退或远程页面。安装器在启动 Web GUI 前使用原生 Windows 能力检测 WebView2 Runtime；缺失时，经用户确认和 Microsoft Authenticode 签名验证后运行随包提供的 Evergreen Bootstrapper，离线发布可附带 Standalone Installer。目标设备不需要 Python、pip、uv 或虚拟环境。
+GUI 使用 pywebview 的 Edge Chromium 后端和本地前端资源，不允许 MSHTML 回退或远程页面。Setup、主 GUI 和卸载 GUI 在导入 pywebview 前检测 WebView2 Runtime；检测失败或缺失时显示原生错误提示并停止启动。程序不安装 Runtime；用户需另行安装 Microsoft Edge WebView2 Runtime 后重试。目标设备不需要 Python、pip、uv 或虚拟环境。
 
 ### 5.2 用户数据
 
@@ -523,7 +523,7 @@ Setup 在导入 pywebview 前以原生能力检查 WebView2，并先验证内置
 - 不唤醒计算机；
 - 所有触发器都调用同一个 `auto` 入口；
 - 当前用户交互式上下文、最低权限和绝对安装路径明确可查；
-- 多实例策略为 `IgnoreNew`，允许电池供电运行，不依赖网络；
+- 多实例策略为 `Queue`，允许电池供电运行，不依赖网络；执行最长五分钟；
 - 任务定义整体注册和读回验证，改时不得追加或遗留旧触发器。
 
 正式 Windows 适配器通过隔离 PowerShell 进程调用 Task Scheduler 2.0 COM API；本地化的 `schtasks.exe` 文本不作为机器读取源。任务检查使用版本化规范模型报告字段级漂移，创建、更新、修复和删除均须幂等；失败时恢复原完整定义。任务、主题管理和 Explorer 维护桥接均通过共享适配器设置 `CREATE_NO_WINDOW` 与隐藏启动信息，GUI 首次概况读取和后续控件调用不得闪出 PowerShell/CMD。详细契约见 [SCHEDULER.md](SCHEDULER.md)。
@@ -543,7 +543,7 @@ Setup 在导入 pywebview 前以原生能力检查 WebView2，并先验证内置
 
 ### 9.4 WebView2
 
-WebView2 只承担按需 GUI 的渲染，不属于自动切换链路。安装器和正式程序均通过独立检测适配器确认 Runtime；桥接 DLL 不能替代系统 Runtime。缺失、版本不可用或初始化失败时，用原生 Windows 对话框报告并提供修复路径，不静默选择旧渲染器。WebView 用户数据与程序文件分离，升级保留，卸载时随用户数据选择清理。
+WebView2 只承担按需 GUI 的渲染，不属于自动切换链路。Setup、主 GUI 和卸载 GUI 在导入 pywebview 前检测 Runtime；桥接 DLL 不能替代系统 Runtime。缺失或检测失败时显示原生 Windows 错误提示并停止启动。程序不下载或运行 Runtime 安装程序；用户另行安装 Microsoft Edge WebView2 Runtime 后重新启动。WebView 用户数据与程序文件分离，升级保留，卸载时随用户数据选择清理。
 
 ## 10. 质量属性
 
@@ -559,11 +559,11 @@ WebView2 只承担按需 GUI 的渲染，不属于自动切换链路。安装器
 
 - 不要求不必要的管理员权限，不写入系统目录。
 - 不关闭 Defender 或 SmartScreen，不创建自动排除项。
-- 不使用 UPX、代码混淆、隐藏命令或动态下载并执行应用代码；经用户确认和签名验证的微软 WebView2 Evergreen 系统依赖安装除外。
+- 不使用 UPX、代码混淆、隐藏命令或动态下载并执行应用代码。WebView2 Runtime 由用户另行安装。
 - 发布固定名称、版本元数据和 SHA-256，并保持构建可复现。
-- 首版自有可执行文件不采用 Authenticode 签名；少量熟人分发通过发布哈希、载荷清单、可复现构建记录和明确的 SmartScreen 说明建立信任。微软 WebView2 安装程序的签名验证不受此决定影响。
+- 首版自有可执行文件不采用 Authenticode 签名；少量熟人分发通过发布哈希、载荷清单、可复现构建记录和明确的 SmartScreen 说明建立信任。
 - pywebview 只加载本地资源，正式构建关闭调试，前端只能调用最小白名单 API。
-- WebView2 安装必须由用户知情，缺失时不得以远程页面或旧渲染器绕过。
+- WebView2 缺失或检测失败时必须显示原生错误提示并停止启动，不得以远程页面或旧渲染器绕过。
 
 ### 10.3 可维护性
 
@@ -605,13 +605,13 @@ WebView2 只承担按需 GUI 的渲染，不属于自动切换链路。安装器
 13. v1 正式 JSON 使用精确字段集；未知字段、未知版本和错误类型均拒绝。
 14. 配置或状态不可信时禁止自动系统修改；首次安装备份损坏时禁止覆盖原证据。
 15. 日志为固定字段 JSON Lines，按 1 MiB×5 轮换；运行事务按冻结保留参数清理。
-16. 任务计划固定为一个根任务：四个每日预提醒/边界触发器及至多一对受可信状态绑定的一次性延后触发器；全部调用相同 `auto`，使用当前用户交互式最低权限、错过补运行、不唤醒和 `IgnoreNew`。
+16. 任务计划固定为一个根任务：四个每日预提醒/边界触发器、至多一对受可信状态绑定的一次性延后触发器及可选 AutoRetry；全部调用相同 `auto`，使用当前用户交互式最低权限、错过补运行、不唤醒和 `Queue`。
 17. 恢复只解除持久暂停，不自动切换；产品不暴露脱离计划编辑的通用立即同步。
     实际切换由计划边界驱动，或由设置页在完整保存后显式应用真实当前时段。
 18. GUI 为单窗口、分组式、按需启动且关闭即退出；不设托盘，不检测或控制 Windows 色温“夜间模式”。
 19. 使用 `uv` 和 `uv.lock` 管理项目专用构建环境；运行依赖与 PyInstaller 构建依赖分组锁定。
 20. 正式主程序只保留一个无控制台入口并采用 PyInstaller `onedir`；单文件只用于 GUI 安装器和独立卸载器，不用于任务或日常 GUI。
-21. WebView2 Runtime 由安装器检测并通过 Evergreen 路径修复；不降级到 MSHTML。
+21. Setup、主 GUI 和卸载 GUI 在导入 pywebview 前检测 WebView2 Runtime；缺失时显示原生错误提示并停止启动，用户另行安装后重试；不降级到 MSHTML。
 22. 源代码 GUI 默认是安全预览：必须显式提供数据根，任务和 Windows 写入关闭；启用实机写入还必须提供明确的正式可执行文件目标。
 23. 当前用户“已安装的应用”登记提供“更改”和“卸载”：前者进入主 GUI 维护区，后者调用独立卸载器。
 24. Setup 不长期缓存；同版本重装和升级采用暂存、哈希验证、目录交换和旧版本回滚，不直接覆盖损坏程序。

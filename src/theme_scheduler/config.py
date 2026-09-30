@@ -37,6 +37,11 @@ def _exact_keys(payload: Mapping[str, Any], expected: set[str], location: str) -
         )
 
 
+def _time_minutes(value: str) -> int:
+    hour, minute = (int(part) for part in value.split(":"))
+    return hour * 60 + minute
+
+
 @dataclass(frozen=True)
 class AppConfig:
     day_start: str
@@ -61,8 +66,15 @@ class AppConfig:
             self.night_start
         ):
             raise ConfigValidationError("schedule.nightStart must use HH:mm.")
+        day_minutes = _time_minutes(self.day_start)
+        night_minutes = _time_minutes(self.night_start)
         if self.day_start == self.night_start:
             raise ConfigValidationError("Day and night start times must differ.")
+        delta = abs(day_minutes - night_minutes)
+        if min(delta, 1440 - delta) <= 5:
+            raise ConfigValidationError(
+                "Day and night start times must be more than five minutes apart."
+            )
         if (
             not isinstance(self.day_apps_theme, str)
             or self.day_apps_theme not in THEME_MODES

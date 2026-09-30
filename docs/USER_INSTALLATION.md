@@ -10,7 +10,7 @@
 
 - 不要求预装 Python、uv、虚拟环境或 pywebview；
 - 通常不要求管理员权限；
-- Windows 11 通常已带有 WebView2 Runtime；缺失时安装器会给出处理提示；
+- Windows 11 通常已带有 WebView2 Runtime；缺失或检测失败时会显示原生错误提示并停止启动，用户另行安装 Microsoft Edge WebView2 Runtime 后可重试；
 - 不支持 Windows on ARM 的 ARM64 原生环境；
 - 不提供后台自动更新。
 

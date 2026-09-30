@@ -27,8 +27,9 @@ from theme_scheduler.scheduler import (
     inspect_task,
     reconcile_task,
     set_task_enabled,
+    validate_desired_task,
 )
-from theme_scheduler.switch_override import PendingSwitch
+from theme_scheduler.switch_override import PendingSwitch, SwitchDecision
 
 EXECUTABLE = (
     r"C:\Users\Example\AppData\Local\Programs"
@@ -182,6 +183,93 @@ class TaskContractTests(unittest.TestCase):
             scheduled,
         )
 
+    def test_skipped_delayed_switch_does_not_recreate_deferred_triggers(self) -> None:
+        scheduled = datetime(2026, 7, 26, 20, 30, tzinfo=timezone(timedelta(hours=8)))
+        pending = PendingSwitch.create(
+            target_profile="night",
+            scheduled_at=scheduled - timedelta(minutes=30),
+            next_fixed_at=datetime(2026, 7, 27, 6, 15, tzinfo=scheduled.tzinfo),
+            now=scheduled - timedelta(minutes=35),
+        )
+        pending = replace(
+            pending,
+            decision=SwitchDecision.SKIPPED,
+            scheduled_at=scheduled,
+            defer_count=1,
+            updated_at=scheduled - timedelta(minutes=1),
+        )
+
+        task = build_task_spec(
+            AppConfig.defaults(),
+            executable=EXECUTABLE,
+            user_id=USER_ID,
+            pending_switch=pending,
+        )
+
+        self.assertEqual(len(task.triggers), 4)
+
+    def test_fixed_task_uses_queue_with_bounded_execution_limit(self) -> None:
+        task = task_spec()
+
+        self.assertEqual(task.settings.multiple_instances, "Queue")
+        self.assertEqual(task.settings.execution_time_limit, "PT5M")
+
+    def test_validator_accepts_only_the_four_retry_and_deferred_topologies(
+        self,
+    ) -> None:
+        fixed = task_spec()
+        future = "2026-07-27T12:00:00+08:00"
+        retry = TimeTrigger("AutoRetry", future)
+        scheduled = datetime(2026, 7, 26, 20, 30, tzinfo=timezone(timedelta(hours=8)))
+        pending = replace(
+            PendingSwitch.create(
+                target_profile="night",
+                scheduled_at=scheduled - timedelta(minutes=30),
+                next_fixed_at=datetime(2026, 7, 27, 6, 15, tzinfo=scheduled.tzinfo),
+                now=scheduled - timedelta(minutes=35),
+            ),
+            scheduled_at=scheduled,
+            defer_count=1,
+            updated_at=scheduled - timedelta(minutes=29),
+        )
+        deferred = build_task_spec(
+            AppConfig.defaults(),
+            executable=EXECUTABLE,
+            user_id=USER_ID,
+            pending_switch=pending,
+        )
+
+        for candidate in (
+            fixed,
+            replace(fixed, triggers=(*fixed.triggers, retry)),
+            deferred,
+            replace(deferred, triggers=(*deferred.triggers, retry)),
+        ):
+            with self.subTest(
+                trigger_ids={item.trigger_id for item in candidate.triggers}
+            ):
+                try:
+                    validate_desired_task(candidate)
+                except SchedulerContractError as exc:
+                    self.fail(f"Valid trigger topology was rejected: {exc}")
+
+        with self.assertRaises(SchedulerContractError):
+            validate_desired_task(
+                replace(
+                    fixed, triggers=(*fixed.triggers, TimeTrigger("Invalid", future))
+                )
+            )
+        with self.assertRaises(SchedulerContractError):
+            validate_desired_task(
+                replace(
+                    fixed,
+                    triggers=(
+                        *fixed.triggers,
+                        DailyTrigger("AutoRetry", "12:00"),
+                    ),
+                )
+            )
+
     def test_freezes_current_user_and_low_disturbance_settings(self) -> None:
         task = task_spec()
 
@@ -189,7 +277,7 @@ class TaskContractTests(unittest.TestCase):
         self.assertEqual(task.principal.run_level, "LeastPrivilege")
         self.assertTrue(task.settings.start_when_available)
         self.assertFalse(task.settings.wake_to_run)
-        self.assertEqual(task.settings.multiple_instances, "IgnoreNew")
+        self.assertEqual(task.settings.multiple_instances, "Queue")
         self.assertTrue(task.settings.allow_start_on_batteries)
         self.assertFalse(task.settings.stop_if_going_on_batteries)
         self.assertFalse(task.settings.run_only_if_network_available)
