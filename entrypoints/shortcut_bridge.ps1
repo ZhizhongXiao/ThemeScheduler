@@ -15,6 +15,7 @@ $OutputEncoding = [Console]::OutputEncoding
 Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace ThemeSchedulerShortcutBridge
 {
@@ -55,6 +56,40 @@ namespace ThemeSchedulerShortcutBridge
         [PreserveSig]
         int GetCurFile(
             [MarshalAs(UnmanagedType.LPWStr)] out string fileName
+        );
+    }
+
+    [ComImport]
+    [Guid("000214F9-0000-0000-C000-000000000046")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IShellLinkW
+    {
+        [PreserveSig]
+        int GetClassID(out Guid classId);
+
+        [PreserveSig]
+        int GetPath(
+            [Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder fileName,
+            int characterCount,
+            IntPtr findData,
+            uint flags
+        );
+
+        [PreserveSig]
+        int GetIDList(out IntPtr itemIdList);
+
+        [PreserveSig]
+        int SetIDList(IntPtr itemIdList);
+
+        [PreserveSig]
+        int GetDescription(
+            [Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder description,
+            int characterCount
+        );
+
+        [PreserveSig]
+        int SetDescription(
+            [MarshalAs(UnmanagedType.LPWStr)] string description
         );
     }
 
@@ -238,6 +273,47 @@ namespace ThemeSchedulerShortcutBridge
             return ReadGuid(path, ToastActivatorClsidKey);
         }
 
+        public static string ReadDescription(string path)
+        {
+            object link = new ShellLink();
+            try
+            {
+                IPersistFile persist = (IPersistFile)link;
+                Check(persist.Load(path, 0), "IPersistFile.Load");
+                IShellLinkW shellLink = (IShellLinkW)link;
+                StringBuilder description = new StringBuilder(1024);
+                Check(
+                    shellLink.GetDescription(description, description.Capacity),
+                    "IShellLinkW.GetDescription"
+                );
+                return description.ToString();
+            }
+            finally
+            {
+                Marshal.FinalReleaseComObject(link);
+            }
+        }
+
+        public static void WriteDescription(string path, string description)
+        {
+            object link = new ShellLink();
+            try
+            {
+                IPersistFile persist = (IPersistFile)link;
+                Check(persist.Load(path, 2), "IPersistFile.Load");
+                IShellLinkW shellLink = (IShellLinkW)link;
+                Check(
+                    shellLink.SetDescription(description),
+                    "IShellLinkW.SetDescription"
+                );
+                Check(persist.Save(path, true), "IPersistFile.Save");
+            }
+            finally
+            {
+                Marshal.FinalReleaseComObject(link);
+            }
+        }
+
         public static void Write(
             string path,
             string appUserModelId,
@@ -369,7 +445,10 @@ if ($Action -eq 'Read') {
             target = [string]$shortcut.TargetPath
             arguments = [string]$shortcut.Arguments
             workingDirectory = [string]$shortcut.WorkingDirectory
-            description = [string]$shortcut.Description
+            description = (
+                [ThemeSchedulerShortcutBridge.ShortcutIdentity]::
+                    ReadDescription($path)
+            )
             iconLocation = [string]$shortcut.IconLocation
             appUserModelId = (
                 [ThemeSchedulerShortcutBridge.ShortcutIdentity]::
@@ -455,6 +534,10 @@ $shortcut.WorkingDirectory = $request.workingDirectory
 $shortcut.Description = $request.description
 $shortcut.IconLocation = $request.iconLocation
 $shortcut.Save()
+[ThemeSchedulerShortcutBridge.ShortcutIdentity]::WriteDescription(
+    $path,
+    $request.description
+)
 [ThemeSchedulerShortcutBridge.ShortcutIdentity]::Write(
     $path,
     $request.appUserModelId,
