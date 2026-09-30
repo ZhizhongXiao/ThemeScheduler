@@ -264,9 +264,7 @@ class WindowsShortcutIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(actual.description, self.shortcut.description)
         actual_icon, actual_icon_index = actual.icon_location.rsplit(",", 1)
-        expected_icon, expected_icon_index = self.shortcut.icon_location.rsplit(
-            ",", 1
-        )
+        expected_icon, expected_icon_index = self.shortcut.icon_location.rsplit(",", 1)
         self.assertEqual(actual_icon_index, expected_icon_index)
         self.assertTrue(os.path.samefile(actual_icon, expected_icon))
         self.assertEqual(
