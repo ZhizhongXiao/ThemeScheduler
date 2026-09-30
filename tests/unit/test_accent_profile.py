@@ -56,20 +56,34 @@ class DynamicThemeBackend:
     def current_theme_path(self) -> Path:
         return self.active
 
-    def current_v2_index(self) -> int:
+    def current_v2_index(self, *, timeout_seconds: float | None = None) -> int:
         return self.index
 
-    def current_v2_indices(self) -> tuple[int, int]:
+    def current_v2_indices(
+        self,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> tuple[int, int]:
         return self.index, 0
 
-    def apply_theme_v2(self, path: Path) -> tuple[int, int]:
+    def apply_theme_v2(
+        self,
+        path: Path,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> tuple[int, int]:
         before = self.index
         self.index = 13
         if not self.fail_readback:
             self.active = path
         return before, 13
 
-    def set_v2_index(self, index: int) -> int:
+    def set_v2_index(
+        self,
+        index: int,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> int:
         self.set_indices.append(index)
         self.index = index
         self.active = self.original
@@ -676,7 +690,7 @@ class AccentServiceTests(unittest.TestCase):
                     layout,
                     backend=backend,
                     settle_seconds=0,
-                    verification_timeout_seconds=0,
+                    verification_timeout_seconds=0.5,
                 )
 
             transaction = next(layout.runtime.iterdir())
@@ -698,7 +712,7 @@ class AccentServiceTests(unittest.TestCase):
             )
             self.assertIn("activeThemePath", samples[-1])
             self.assertIn("observedAt", samples[-1])
-            self.assertIn("currentIndex", samples[-1])
+            self.assertTrue(any("currentIndex" in sample for sample in samples))
             self.assertEqual(backend.set_indices, [6])
 
 

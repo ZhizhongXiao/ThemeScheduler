@@ -2,6 +2,7 @@
 
 from .constants import (
     AUTO_ARGUMENTS,
+    AUTO_RETRY_TRIGGER_ID,
     DAY_PREPARE_TRIGGER_ID,
     DAY_TRIGGER_ID,
     DEFAULT_TASK_PATH,
@@ -30,11 +31,18 @@ from .mutation import (
     reconcile_task,
     set_task_enabled,
 )
+from .retry import (
+    AutoRetryOutcome,
+    AutoRetryStatus,
+    ceil_to_whole_minute,
+    ensure_future_auto_retry,
+)
 from .specification import build_task_spec, validate_desired_task
 from .triggers import DailyTrigger, TaskTrigger, TimeTrigger
 
 __all__ = [
     "AUTO_ARGUMENTS",
+    "AUTO_RETRY_TRIGGER_ID",
     "DAY_PREPARE_TRIGGER_ID",
     "DAY_TRIGGER_ID",
     "DEFAULT_TASK_PATH",
@@ -46,6 +54,8 @@ __all__ = [
     "TASK_BACKUP_SCHEMA_VERSION",
     "TASK_SPEC_KIND",
     "TASK_SPEC_SCHEMA_VERSION",
+    "AutoRetryOutcome",
+    "AutoRetryStatus",
     "DailyTrigger",
     "SchedulerContractError",
     "SchedulerMutationError",
@@ -61,8 +71,10 @@ __all__ = [
     "TaskTrigger",
     "TimeTrigger",
     "build_task_spec",
+    "ceil_to_whole_minute",
     "compare_task_specs",
     "delete_task",
+    "ensure_future_auto_retry",
     "inspect_task",
     "reconcile_task",
     "set_task_enabled",

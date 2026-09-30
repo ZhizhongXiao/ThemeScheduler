@@ -217,6 +217,11 @@ class SetupService:
             )
         except Exception as exc:
             rollback_results: list[bool] = []
+            deployment_rollback_attempted = bool(
+                deployment_outcome is not None and deployment_outcome.rollback_attempted
+            )
+            if deployment_rollback_attempted and deployment_outcome is not None:
+                rollback_results.append(deployment_outcome.rollback_succeeded is True)
             if integration_started and integration_backup is not None:
                 report_progress(progress, "rolling-back-integration")
                 try:
@@ -255,11 +260,19 @@ class SetupService:
                     )
                 except Exception:
                     rollback_results.append(False)
-            rollback_attempted = bool(rollback_results)
-            rollback_succeeded = all(rollback_results) if rollback_results else None
+            rollback_attempted = deployment_rollback_attempted or bool(rollback_results)
+            rollback_succeeded = all(rollback_results) if rollback_attempted else None
+            deployment_partial = (
+                deployment_outcome is not None
+                and deployment_outcome.status == "partial"
+            )
             report_progress(progress, "failed")
             return SetupOutcome(
-                ("failed" if rollback_succeeded is not False else "partial"),
+                (
+                    "partial"
+                    if deployment_partial or rollback_succeeded is False
+                    else "failed"
+                ),
                 plan.operation,
                 self.manifest.version,
                 False,

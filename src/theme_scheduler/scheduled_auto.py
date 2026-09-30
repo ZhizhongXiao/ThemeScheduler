@@ -27,7 +27,14 @@ from .scheduled_notifications import (
     error_notification,
     success_notification,
 )
-from .scheduler import TaskSchedulerBackend, build_task_spec, reconcile_task
+from .scheduler import (
+    AutoRetryOutcome,
+    AutoRetryStatus,
+    TaskSchedulerBackend,
+    build_task_spec,
+    ensure_future_auto_retry,
+    reconcile_task,
+)
 from .state import AppState, StateStore
 from .storage import UserDataLayout
 from .switch_override import (
@@ -71,9 +78,15 @@ class ScheduledRunOutcome:
     pending_changed: bool = False
     task_changed: bool = False
     notification: NotificationDelivery | None = None
+    retry_status: AutoRetryStatus | None = None
+    recovery_guaranteed: bool | None = None
+    scheduler_cleanup_error: str | None = None
+    maintenance_required: bool = False
 
     @property
     def exit_code(self) -> AutoExitCode:
+        if self.maintenance_required:
+            return AutoExitCode.PARTIAL_FAILURE
         if self.core is not None:
             return self.core.exit_code
         if self.result in {
@@ -99,6 +112,12 @@ class ScheduledRunOutcome:
             "targetProfile": self.target_profile,
             "pendingSwitchChanged": self.pending_changed,
             "taskSchedulerChanged": self.task_changed,
+            "autoRetryStatus": (
+                self.retry_status.value if self.retry_status is not None else None
+            ),
+            "recoveryGuaranteed": self.recovery_guaranteed,
+            "schedulerCleanupError": self.scheduler_cleanup_error,
+            "maintenanceRequired": self.maintenance_required,
             "notification": (
                 self.notification.as_dict() if self.notification is not None else None
             ),
@@ -175,6 +194,7 @@ class ScheduledAutoCoordinator:
         event_log: EventLogSink | None = None,
         dedup_store: NotificationDedupStore | None = None,
         notification_lock: ExecutionLock | None = None,
+        scheduler_mutation_lock: ExecutionLock | None = None,
         sleeper: Callable[[float], None] = sleep,
     ) -> None:
         self.layout = layout
@@ -204,6 +224,7 @@ class ScheduledAutoCoordinator:
             )
         )
         self.sleeper = sleeper
+        self.scheduler_mutation_lock = scheduler_mutation_lock
 
     @staticmethod
     def _timestamp(value: datetime) -> str:
@@ -248,15 +269,9 @@ class ScheduledAutoCoordinator:
             pending_switch=pending,
         )
 
-    def _remove_pending(
-        self, config: AppConfig, pending: PendingSwitch
-    ) -> tuple[bool, bool]:
-        task_changed = False
-        if pending.defer_count > 0:
-            task_outcome = reconcile_task(self.tasks, self._desired_task(config, None))
-            task_changed = task_outcome.changed
+    def _remove_pending(self, pending: PendingSwitch) -> tuple[bool, bool]:
         self.pending_store.clear(pending)
-        return True, task_changed
+        return True, False
 
     def _notification_fallback(
         self,
@@ -353,6 +368,121 @@ class ScheduledAutoCoordinator:
                     ),
                 )
         return outcome
+
+    def _retry_after_lock_timeout(
+        self,
+        now: datetime,
+    ) -> ScheduledRunOutcome:
+        try:
+            context = self._load_run_context(now)
+            desired = self._desired_task(context.config, context.pending)
+        except Exception as exc:
+            retry = AutoRetryOutcome(
+                AutoRetryStatus.UNAVAILABLE,
+                None,
+                False,
+                False,
+                f"Trusted schedule data is unavailable: {type(exc).__name__}: {exc}",
+            )
+        else:
+            retry = ensure_future_auto_retry(
+                self.tasks,
+                desired,
+                now,
+                mutation_lock=self.scheduler_mutation_lock,
+            )
+        detail = (
+            f"AutoRetry {retry.status.value}"
+            if retry.wakeup_guaranteed
+            else "No future AutoRetry wakeup could be confirmed"
+        )
+        if retry.error:
+            detail = f"{detail}: {retry.error}"
+        return ScheduledRunOutcome(
+            ScheduledRunKind.ALREADY_RUNNING,
+            f"Another operation owns the execution lock. {detail}",
+            task_changed=retry.status is AutoRetryStatus.CREATED,
+            retry_status=retry.status,
+            recovery_guaranteed=retry.wakeup_guaranteed,
+        )
+
+    def _reconcile_before_decision(
+        self,
+        context: _RunContext,
+    ) -> ScheduledRunOutcome | None:
+        try:
+            desired = self._desired_task(context.config, context.pending)
+            task_outcome = reconcile_task(
+                self.tasks,
+                desired,
+                now=context.now,
+                mutation_lock=self.scheduler_mutation_lock,
+            )
+        except Exception as exc:
+            try:
+                desired = self._desired_task(context.config, context.pending)
+                retry = ensure_future_auto_retry(
+                    self.tasks,
+                    desired,
+                    context.now,
+                    mutation_lock=self.scheduler_mutation_lock,
+                )
+            except Exception as retry_exc:
+                retry = AutoRetryOutcome(
+                    AutoRetryStatus.UNAVAILABLE,
+                    None,
+                    False,
+                    False,
+                    f"{type(retry_exc).__name__}: {retry_exc}",
+                )
+            detail = (
+                "A future AutoRetry is confirmed."
+                if retry.wakeup_guaranteed
+                else "No recovery wakeup is guaranteed."
+            )
+            return ScheduledRunOutcome(
+                ScheduledRunKind.PARTIAL_FAILURE,
+                f"Task Scheduler reconciliation failed: "
+                f"{type(exc).__name__}: {exc}. {detail}",
+                pending_changed=context.pending_changed,
+                task_changed=context.task_changed
+                or retry.status is AutoRetryStatus.CREATED,
+                retry_status=retry.status,
+                recovery_guaranteed=retry.wakeup_guaranteed,
+            )
+        context.task_changed = context.task_changed or task_outcome.changed
+        return None
+
+    def _cleanup_retry_after_outcome(
+        self,
+        context: _RunContext,
+        outcome: ScheduledRunOutcome,
+    ) -> ScheduledRunOutcome:
+        try:
+            task_outcome = reconcile_task(
+                self.tasks,
+                self._desired_task(context.config, context.pending),
+                now=context.now,
+                clear_auto_retry=True,
+                mutation_lock=self.scheduler_mutation_lock,
+            )
+        except Exception as exc:
+            message = f"AutoRetry cleanup failed: {type(exc).__name__}: {exc}"
+            return replace(
+                outcome,
+                result=ScheduledRunKind.PARTIAL_FAILURE,
+                message=f"{outcome.message} {message}",
+                task_changed=context.task_changed,
+                scheduler_cleanup_error=message,
+                maintenance_required=True,
+            )
+        context.task_changed = context.task_changed or task_outcome.changed
+        return replace(
+            outcome,
+            task_changed=outcome.task_changed or context.task_changed,
+            retry_status=None,
+            recovery_guaranteed=False,
+        )
 
     def _send_success_notification(
         self,
@@ -477,9 +607,8 @@ class ScheduledAutoCoordinator:
                 f"Execution lock failed: {type(exc).__name__}: {exc}",
             )
         if not acquired:
-            return ScheduledRunOutcome(
-                ScheduledRunKind.ALREADY_RUNNING,
-                "Another operation owns the execution lock.",
+            return self._complete_notifications(
+                self._retry_after_lock_timeout(self.clock.now())
             )
         try:
             outcome = self.run_locked()
@@ -514,7 +643,7 @@ class ScheduledAutoCoordinator:
         if pending is None:
             return None
         try:
-            cleared, repaired = self._remove_pending(context.config, pending)
+            cleared, repaired = self._remove_pending(pending)
         except Exception as exc:
             return ScheduledRunOutcome(
                 ScheduledRunKind.PARTIAL_FAILURE,
@@ -757,14 +886,19 @@ class ScheduledAutoCoordinator:
                 f"Schedule data is untrusted: {type(exc).__name__}: {exc}",
             )
 
-        failure = self._cleanup_disabled_notifications(context)
-        if failure is not None:
-            return failure
         failure = self._cleanup_superseded_switch(context)
         if failure is not None:
             return failure
+        failure = self._cleanup_disabled_notifications(context)
+        if failure is not None:
+            return failure
+        failure = self._reconcile_before_decision(context)
+        if failure is not None:
+            return failure
         if context.state.paused:
-            return self._run_paused(context)
-        if context.pending is not None:
-            return self._run_pending(context)
-        return self._run_fixed_boundary(context)
+            outcome = self._run_paused(context)
+        elif context.pending is not None:
+            outcome = self._run_pending(context)
+        else:
+            outcome = self._run_fixed_boundary(context)
+        return self._cleanup_retry_after_outcome(context, outcome)

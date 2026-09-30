@@ -4,6 +4,7 @@ import json
 import tempfile
 import threading
 import unittest
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -27,8 +28,10 @@ from theme_scheduler.scheduled_auto import (
     upcoming_fixed_boundary,
 )
 from theme_scheduler.scheduler import (
+    AutoRetryStatus,
     TaskDefinitionBackup,
     TaskSpec,
+    TimeTrigger,
     build_task_spec,
 )
 from theme_scheduler.state import AppState, StateStore
@@ -57,13 +60,14 @@ class FixedClock:
 
 
 class FakeLock:
-    def __init__(self) -> None:
+    def __init__(self, acquire_result: bool = True) -> None:
+        self.acquire_result = acquire_result
         self.acquired = 0
         self.released = 0
 
     def acquire(self) -> bool:
         self.acquired += 1
-        return True
+        return self.acquire_result
 
     def release(self) -> None:
         self.released += 1
@@ -267,6 +271,7 @@ class ScheduledAutoTests(unittest.TestCase):
         log: MemoryLog | None = None,
         notification_lock: ExecutionLock | None = None,
         sleeps: list[float] | None = None,
+        execution_lock: ExecutionLock | None = None,
     ) -> ScheduledAutoCoordinator:
         config = ConfigStore(layout.config).load()
         task_backend = tasks or MemoryTaskBackend(
@@ -279,7 +284,7 @@ class ScheduledAutoTests(unittest.TestCase):
         clock = FixedClock(now)
         return ScheduledAutoCoordinator(
             layout,
-            FakeLock(),
+            execution_lock or FakeLock(),
             core or StubCore(),
             task_backend,
             notifier or FakeNotifier(),
@@ -306,6 +311,290 @@ class ScheduledAutoTests(unittest.TestCase):
         self.assertEqual(value.scheduled_at.minute, 15)
         self.assertEqual(value.next_fixed_at.hour, 23)
         self.assertEqual(value.next_fixed_at.minute, 45)
+
+    def test_mutex_timeout_schedules_a_future_retry(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            layout = self._layout(Path(raw))
+            tasks = MemoryTaskBackend(
+                build_task_spec(
+                    ConfigStore(layout.config).load(),
+                    executable=EXECUTABLE,
+                    user_id=USER_ID,
+                )
+            )
+            now = datetime(2026, 7, 26, 12, 0, 1, tzinfo=UTC8)
+            outcome = self._coordinator(
+                layout,
+                now,
+                tasks=tasks,
+                execution_lock=FakeLock(acquire_result=False),
+            ).run()
+
+            self.assertIs(outcome.result, ScheduledRunKind.ALREADY_RUNNING)
+            self.assertEqual(outcome.retry_status, AutoRetryStatus.CREATED)
+            self.assertTrue(outcome.recovery_guaranteed)
+            assert tasks.task is not None
+            retries = [
+                trigger
+                for trigger in tasks.task.triggers
+                if isinstance(trigger, TimeTrigger)
+                and trigger.trigger_id == "AutoRetry"
+            ]
+            self.assertEqual(len(retries), 1)
+            retry = retries[0]
+            self.assertEqual(
+                datetime.fromisoformat(retry.start_at),
+                now.replace(second=0, microsecond=0) + timedelta(minutes=2),
+            )
+
+    def test_mutex_timeout_preserves_an_existing_future_retry(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            layout = self._layout(Path(raw))
+            now = datetime(2026, 7, 26, 12, 0, 1, tzinfo=UTC8)
+            retry_at = now.replace(second=0, microsecond=0) + timedelta(minutes=4)
+            task = build_task_spec(
+                ConfigStore(layout.config).load(),
+                executable=EXECUTABLE,
+                user_id=USER_ID,
+            )
+            tasks = MemoryTaskBackend(
+                replace(
+                    task,
+                    triggers=(
+                        *task.triggers,
+                        TimeTrigger(
+                            "AutoRetry",
+                            retry_at.isoformat(timespec="seconds"),
+                        ),
+                    ),
+                )
+            )
+
+            outcome = self._coordinator(
+                layout,
+                now,
+                tasks=tasks,
+                execution_lock=FakeLock(acquire_result=False),
+            ).run()
+
+            assert tasks.task is not None
+            retry = next(
+                trigger
+                for trigger in tasks.task.triggers
+                if isinstance(trigger, TimeTrigger)
+                and trigger.trigger_id == "AutoRetry"
+            )
+            self.assertEqual(retry.start_at, retry_at.isoformat(timespec="seconds"))
+            self.assertEqual(tasks.register_count, 0)
+            self.assertEqual(outcome.retry_status, AutoRetryStatus.EXISTING)
+            self.assertTrue(outcome.recovery_guaranteed)
+
+    def test_mutex_timeout_replaces_an_expired_retry_with_a_future_one(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            layout = self._layout(Path(raw))
+            now = datetime(2026, 7, 26, 12, 0, 1, tzinfo=UTC8)
+            task = build_task_spec(
+                ConfigStore(layout.config).load(),
+                executable=EXECUTABLE,
+                user_id=USER_ID,
+            )
+            tasks = MemoryTaskBackend(
+                replace(
+                    task,
+                    triggers=(
+                        *task.triggers,
+                        TimeTrigger(
+                            "AutoRetry",
+                            (
+                                now.replace(second=0, microsecond=0)
+                                - timedelta(minutes=1)
+                            ).isoformat(timespec="seconds"),
+                        ),
+                    ),
+                )
+            )
+
+            outcome = self._coordinator(
+                layout,
+                now,
+                tasks=tasks,
+                execution_lock=FakeLock(acquire_result=False),
+            ).run()
+
+            assert tasks.task is not None
+            retry = next(
+                trigger
+                for trigger in tasks.task.triggers
+                if isinstance(trigger, TimeTrigger)
+                and trigger.trigger_id == "AutoRetry"
+            )
+            self.assertGreater(datetime.fromisoformat(retry.start_at), now)
+            self.assertEqual(
+                datetime.fromisoformat(retry.start_at),
+                now.replace(second=0, microsecond=0) + timedelta(minutes=2),
+            )
+            self.assertEqual(outcome.retry_status, AutoRetryStatus.CREATED)
+
+    def test_retry_readback_failure_does_not_claim_wakeup_guarantee(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            layout = self._layout(Path(raw))
+
+            class UnreadableTaskBackend(MemoryTaskBackend):
+                def read(self, task_path: str) -> TaskSpec | None:
+                    raise OSError("Task Scheduler readback unavailable")
+
+            outcome = self._coordinator(
+                layout,
+                datetime(2026, 7, 26, 12, 0, 1, tzinfo=UTC8),
+                tasks=UnreadableTaskBackend(),
+                execution_lock=FakeLock(acquire_result=False),
+            ).run()
+
+            self.assertIs(outcome.retry_status, AutoRetryStatus.UNAVAILABLE)
+            self.assertFalse(outcome.recovery_guaranteed)
+
+    def test_reconciliation_failure_reports_existing_retry_as_guaranteed(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            layout = self._layout(Path(raw))
+            now = datetime(2026, 7, 26, 12, 0, 1, tzinfo=UTC8)
+            config = ConfigStore(layout.config).load()
+            before = build_task_spec(
+                config,
+                executable=EXECUTABLE,
+                user_id=USER_ID,
+            )
+            before = replace(before, enabled=False)
+            retry_at = now.replace(second=0, microsecond=0) + timedelta(minutes=4)
+            before = replace(
+                before,
+                triggers=(
+                    *before.triggers,
+                    TimeTrigger("AutoRetry", retry_at.isoformat(timespec="seconds")),
+                ),
+            )
+
+            class FailingRegisterBackend(MemoryTaskBackend):
+                def register(self, task: TaskSpec) -> None:
+                    raise OSError("temporary task mutation failure")
+
+            tasks = FailingRegisterBackend(before)
+            outcome = self._coordinator(
+                layout,
+                now,
+                tasks=tasks,
+                execution_lock=FakeLock(),
+            ).run()
+
+            self.assertIs(outcome.result, ScheduledRunKind.PARTIAL_FAILURE)
+            self.assertIs(outcome.retry_status, AutoRetryStatus.EXISTING)
+            self.assertTrue(outcome.recovery_guaranteed)
+            self.assertEqual(tasks.task, before)
+
+    def test_reconciliation_failure_without_retry_reports_no_guarantee(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            layout = self._layout(Path(raw))
+            now = datetime(2026, 7, 26, 12, 0, 1, tzinfo=UTC8)
+            fixed = build_task_spec(
+                ConfigStore(layout.config).load(),
+                executable=EXECUTABLE,
+                user_id=USER_ID,
+            )
+
+            class FailingRegisterBackend(MemoryTaskBackend):
+                def register(self, task: TaskSpec) -> None:
+                    raise OSError("temporary task mutation failure")
+
+            tasks = FailingRegisterBackend(replace(fixed, enabled=False))
+            outcome = self._coordinator(
+                layout,
+                now,
+                tasks=tasks,
+                execution_lock=FakeLock(),
+            ).run()
+
+            self.assertIs(outcome.result, ScheduledRunKind.PARTIAL_FAILURE)
+            self.assertIs(outcome.retry_status, AutoRetryStatus.UNAVAILABLE)
+            self.assertFalse(outcome.recovery_guaranteed)
+
+    def test_retry_cleanup_failure_preserves_successful_core_outcome(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            layout = self._layout(Path(raw))
+            now = datetime(2026, 7, 26, 6, 16, tzinfo=UTC8)
+            fixed = build_task_spec(
+                ConfigStore(layout.config).load(),
+                executable=EXECUTABLE,
+                user_id=USER_ID,
+            )
+            retry_at = now.replace(second=0, microsecond=0) + timedelta(minutes=4)
+
+            class CannotRemoveRetryBackend(MemoryTaskBackend):
+                def register(self, task: TaskSpec) -> None:
+                    if not any(t.trigger_id == "AutoRetry" for t in task.triggers):
+                        raise OSError("injected retry cleanup failure")
+                    super().register(task)
+
+            tasks = CannotRemoveRetryBackend(
+                replace(
+                    fixed,
+                    triggers=(
+                        *fixed.triggers,
+                        TimeTrigger(
+                            "AutoRetry", retry_at.isoformat(timespec="seconds")
+                        ),
+                    ),
+                )
+            )
+            core = StubCore()
+            outcome = self._coordinator(
+                layout,
+                now,
+                tasks=tasks,
+                core=core,
+            ).run()
+
+            self.assertIs(outcome.result, ScheduledRunKind.PARTIAL_FAILURE)
+            self.assertIsNotNone(outcome.core)
+            assert outcome.core is not None
+            self.assertIs(outcome.core.result, AutoResultKind.APPLIED)
+            self.assertIsNotNone(outcome.scheduler_cleanup_error)
+            assert outcome.scheduler_cleanup_error is not None
+            self.assertIn("retry cleanup", outcome.scheduler_cleanup_error.lower())
+
+    def test_verified_theme_failure_does_not_schedule_or_keep_retry(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            layout = self._layout(Path(raw))
+            now = datetime(2026, 7, 26, 6, 16, tzinfo=UTC8)
+            fixed = build_task_spec(
+                ConfigStore(layout.config).load(),
+                executable=EXECUTABLE,
+                user_id=USER_ID,
+            )
+            existing_retry = now.replace(second=0, microsecond=0) + timedelta(minutes=3)
+            tasks = MemoryTaskBackend(
+                replace(
+                    fixed,
+                    triggers=(
+                        *fixed.triggers,
+                        TimeTrigger(
+                            "AutoRetry",
+                            existing_retry.isoformat(timespec="seconds"),
+                        ),
+                    ),
+                )
+            )
+
+            outcome = self._coordinator(
+                layout,
+                now,
+                tasks=tasks,
+                core=StubCore(AutoResultKind.APPLY_FAILED_ROLLED_BACK),
+            ).run()
+
+            self.assertIs(outcome.result, ScheduledRunKind.CORE)
+            assert tasks.task is not None
+            self.assertNotIn(
+                "AutoRetry", {trigger.trigger_id for trigger in tasks.task.triggers}
+            )
 
     def test_fixed_prepare_creates_pending_state_and_three_actions(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -409,6 +698,18 @@ class ScheduledAutoTests(unittest.TestCase):
             ).run()
             self.assertIs(at_original.result, ScheduledRunKind.WAITING)
             self.assertEqual(core.calls, 0)
+            assert tasks.task is not None
+            self.assertEqual(
+                {trigger.trigger_id for trigger in tasks.task.triggers},
+                {
+                    "DayPrepare",
+                    "DayBoundary",
+                    "NightPrepare",
+                    "NightBoundary",
+                    "DeferredPrepare",
+                    "DeferredBoundary",
+                },
+            )
 
             notifier = FakeNotifier()
             at_new_prepare = self._coordinator(
@@ -479,6 +780,88 @@ class ScheduledAutoTests(unittest.TestCase):
             self.assertEqual(sleeps, [5.0])
             self.assertEqual(len(notifier.statuses), 1)
             self.assertEqual(notifier.prepare_clears, 1)
+
+    def test_pending_is_not_applied_when_task_reconciliation_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            layout = self._layout(Path(raw))
+            scheduled = datetime(2026, 7, 26, 6, 15, tzinfo=UTC8)
+            pending = replace(
+                PendingSwitch.create(
+                    target_profile="day",
+                    scheduled_at=scheduled - timedelta(minutes=30),
+                    next_fixed_at=datetime(2026, 7, 26, 23, 45, tzinfo=UTC8),
+                    now=scheduled - timedelta(minutes=35),
+                ),
+                scheduled_at=scheduled,
+                defer_count=1,
+                updated_at=scheduled - timedelta(minutes=29),
+            )
+            PendingSwitchStore(layout.pending_switch).create(pending)
+
+            class UnreadableTaskBackend(MemoryTaskBackend):
+                def read(self, task_path: str) -> TaskSpec | None:
+                    raise OSError("temporary scheduler read failure")
+
+            tasks = UnreadableTaskBackend()
+            core = StubCore()
+            outcome = self._coordinator(
+                layout,
+                scheduled + timedelta(minutes=30),
+                tasks=tasks,
+                core=core,
+            ).run()
+
+            self.assertIs(outcome.result, ScheduledRunKind.PARTIAL_FAILURE)
+            self.assertEqual(core.calls, 0)
+            self.assertTrue(layout.pending_switch.exists())
+
+    def test_expired_pending_is_cleared_before_task_reconciliation(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            layout = self._layout(Path(raw))
+            boundary = datetime(2026, 7, 26, 23, 30, tzinfo=UTC8)
+            pending = replace(
+                PendingSwitch.create(
+                    target_profile="night",
+                    scheduled_at=boundary - timedelta(minutes=30),
+                    next_fixed_at=datetime(2026, 7, 26, 23, 45, tzinfo=UTC8),
+                    now=boundary - timedelta(minutes=35),
+                ),
+                scheduled_at=boundary,
+                defer_count=1,
+                updated_at=boundary - timedelta(minutes=29),
+            )
+            PendingSwitchStore(layout.pending_switch).create(pending)
+            config = ConfigStore(layout.config).load()
+
+            class CheckingTaskBackend(MemoryTaskBackend):
+                def __init__(self) -> None:
+                    super().__init__(
+                        build_task_spec(
+                            config,
+                            executable=EXECUTABLE,
+                            user_id=USER_ID,
+                            pending_switch=pending,
+                        )
+                    )
+                    self.pending_existed_at_first_read: bool | None = None
+
+                def read(self, task_path: str) -> TaskSpec | None:
+                    if self.pending_existed_at_first_read is None:
+                        self.pending_existed_at_first_read = (
+                            layout.pending_switch.exists()
+                        )
+                    return super().read(task_path)
+
+            tasks = CheckingTaskBackend()
+            outcome = self._coordinator(
+                layout,
+                datetime(2026, 7, 26, 23, 46, tzinfo=UTC8),
+                tasks=tasks,
+            ).run()
+
+            self.assertIs(outcome.result, ScheduledRunKind.CORE)
+            self.assertFalse(layout.pending_switch.exists())
+            self.assertFalse(tasks.pending_existed_at_first_read)
 
     def test_skip_consumes_state_without_running_core(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

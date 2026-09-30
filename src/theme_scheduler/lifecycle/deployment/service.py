@@ -39,6 +39,7 @@ class DeploymentOutcome:
     staging: Path
     rollback: Path
     active_verified: bool
+    rollback_attempted: bool
     rollback_succeeded: bool | None
     message: str
 
@@ -53,6 +54,7 @@ class DeploymentOutcome:
             "staging": str(self.staging),
             "rollback": str(self.rollback),
             "activeVerified": self.active_verified,
+            "rollbackAttempted": self.rollback_attempted,
             "rollbackSucceeded": self.rollback_succeeded,
             "message": self.message,
             "windowsChanged": False,
@@ -941,6 +943,10 @@ class FileDeploymentService:
             staging=self.layout.staging(lifecycle.transaction_id),
             rollback=self.layout.rollback(lifecycle.transaction_id),
             active_verified=active_verified,
+            rollback_attempted=(
+                lifecycle.status in {"rolled-back", "partial"}
+                or rollback_succeeded is not None
+            ),
             rollback_succeeded=rollback_succeeded,
             message=message,
         )

@@ -554,6 +554,7 @@ class FileDeploymentRecoveryTests(unittest.TestCase):
             )
             self.assertEqual(first.status, "partial")
             self.assertFalse(first.rollback_succeeded)
+            self.assertTrue(first.as_dict()["rollbackAttempted"])
             self.assertTrue(first.rollback.exists())
 
             recovered = _service(layout).recover(

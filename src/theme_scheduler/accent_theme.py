@@ -104,13 +104,27 @@ class ManagedTheme:
 class ThemeApplyV2Backend(Protocol):
     def current_theme_path(self) -> Path: ...
 
-    def current_v2_index(self) -> int: ...
+    def current_v2_index(self, *, timeout_seconds: float | None = None) -> int: ...
 
-    def current_v2_indices(self) -> tuple[int, int]: ...
+    def current_v2_indices(
+        self,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> tuple[int, int]: ...
 
-    def apply_theme_v2(self, path: Path) -> tuple[int, int]: ...
+    def apply_theme_v2(
+        self,
+        path: Path,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> tuple[int, int]: ...
 
-    def set_v2_index(self, index: int) -> int: ...
+    def set_v2_index(
+        self,
+        index: int,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> int: ...
 
 
 @dataclass(frozen=True)
@@ -513,7 +527,15 @@ class WindowsThemeApplyBackend:
         *,
         theme_path: Path | None = None,
         theme_index: int | None = None,
+        timeout_seconds: float | None = None,
     ) -> dict[str, Any]:
+        timeout = (
+            self.APPLY_TIMEOUT_SECONDS
+            if timeout_seconds is None
+            else min(self.APPLY_TIMEOUT_SECONDS, timeout_seconds)
+        )
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise TimeoutError("Theme manager bridge deadline has expired.")
         if os.name != "nt":
             raise OSError("Windows theme apply requires Windows.")
         bridge = resource_path("entrypoints", "theme_manager_bridge.ps1")
@@ -555,12 +577,12 @@ class WindowsThemeApplyBackend:
                 text=True,
                 encoding="utf-8-sig",
                 errors="replace",
-                timeout=self.APPLY_TIMEOUT_SECONDS,
+                timeout=timeout,
                 **no_window_options(),
             )
         except subprocess.TimeoutExpired as exc:
             raise OSError(
-                f"Theme manager bridge timed out after {self.APPLY_TIMEOUT_SECONDS} seconds."
+                f"Theme manager bridge timed out after {timeout:.3f} seconds."
             ) from exc
         if completed.returncode != 0:
             detail = (completed.stderr or completed.stdout).strip()
@@ -579,11 +601,15 @@ class WindowsThemeApplyBackend:
             )
         return payload
 
-    def current_v2_index(self) -> int:
-        return self.current_v2_indices()[0]
+    def current_v2_index(self, *, timeout_seconds: float | None = None) -> int:
+        return self.current_v2_indices(timeout_seconds=timeout_seconds)[0]
 
-    def current_v2_indices(self) -> tuple[int, int]:
-        payload = self._run_bridge("CurrentV2")
+    def current_v2_indices(
+        self,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> tuple[int, int]:
+        payload = self._run_bridge("CurrentV2", timeout_seconds=timeout_seconds)
         index = payload.get("currentIndex")
         custom = payload.get("customIndex")
         if (
@@ -599,8 +625,17 @@ class WindowsThemeApplyBackend:
             )
         return index, custom
 
-    def apply_theme_v2(self, path: Path) -> tuple[int, int]:
-        payload = self._run_bridge("ApplyV2", theme_path=path)
+    def apply_theme_v2(
+        self,
+        path: Path,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> tuple[int, int]:
+        payload = self._run_bridge(
+            "ApplyV2",
+            theme_path=path,
+            timeout_seconds=timeout_seconds,
+        )
         before = payload.get("beforeIndex")
         current = payload.get("currentIndex")
         if (
@@ -616,21 +651,25 @@ class WindowsThemeApplyBackend:
             )
         return before, current
 
-    def set_v2_index(self, index: int) -> int:
+    def set_v2_index(
+        self,
+        index: int,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> int:
         if isinstance(index, bool) or not isinstance(index, int) or index < 0:
             raise ValueError(f"Theme index is invalid: {index!r}")
-        payload = self._run_bridge("SetV2", theme_index=index)
+        payload = self._run_bridge(
+            "SetV2",
+            theme_index=index,
+            timeout_seconds=timeout_seconds,
+        )
         current = payload.get("currentIndex")
         if isinstance(current, bool) or not isinstance(current, int) or current < 0:
             raise OSError(
                 f"Theme manager bridge returned an invalid current index: {current!r}"
             )
         return current
-
-
-def _settle(seconds: float) -> None:
-    if seconds:
-        time.sleep(seconds)
 
 
 def _read_active_visual_state(
@@ -691,6 +730,17 @@ def _verification_timestamp() -> str:
     return datetime.now().astimezone().isoformat(timespec="milliseconds")
 
 
+def _settle_before_deadline(seconds: float, deadline: float) -> None:
+    if seconds <= 0:
+        return
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError("Theme transaction deadline expired before settling.")
+    time.sleep(min(seconds, remaining))
+    if time.monotonic() >= deadline and seconds > remaining:
+        raise TimeoutError("Theme transaction deadline expired while settling.")
+
+
 def _poll_theme_visual_state(
     backend: ThemeApplyV2Backend,
     expected: ThemeVisualState,
@@ -700,10 +750,14 @@ def _poll_theme_visual_state(
     index_before: int,
     timeout_seconds: float,
     poll_interval_seconds: float,
+    operation_deadline: float,
 ) -> tuple[Path, ThemeVisualState, int, dict[str, object]]:
     started_at = _verification_timestamp()
     started_monotonic = time.monotonic()
-    deadline = started_monotonic + timeout_seconds
+    deadline = min(
+        operation_deadline,
+        started_monotonic + timeout_seconds,
+    )
     samples: list[dict[str, object]] = []
     last_failures: list[str] = []
 
@@ -727,7 +781,12 @@ def _poll_theme_visual_state(
             failures.append(f"Active visual-state read failed: {exc}")
 
         try:
-            current_index, custom_index = backend.current_v2_indices()
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("Theme index verification deadline expired.")
+            current_index, custom_index = backend.current_v2_indices(
+                timeout_seconds=remaining
+            )
             sample["currentIndex"] = current_index
             sample["customIndex"] = custom_index
             try:
@@ -742,6 +801,8 @@ def _poll_theme_visual_state(
             failures.append(f"Theme index read failed: {exc}")
 
         sample["observedAt"] = _verification_timestamp()
+        if time.monotonic() > deadline:
+            failures.append("Theme readback completed after its deadline.")
         sample["failures"] = failures
         samples.append(sample)
         if (
@@ -819,15 +880,28 @@ def _try_restore_original_index(
     before: ThemeVisualState,
     settle_seconds: float,
     visual_state_reader: Callable[[], ThemeVisualState] | None,
+    timeout_seconds: float,
 ) -> bool:
+    deadline = time.monotonic() + timeout_seconds
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        return False
     try:
-        if backend.set_v2_index(index_before) != index_before:
+        if (
+            backend.set_v2_index(index_before, timeout_seconds=remaining)
+            != index_before
+        ):
             return False
-        _settle(settle_seconds)
+        _settle_before_deadline(settle_seconds, deadline)
         _, actual = _read_active_visual_state(backend, visual_state_reader)
-        return not _visual_state_failures(
-            actual,
-            before,
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+        current_index, _ = backend.current_v2_indices(timeout_seconds=remaining)
+        return (
+            current_index == index_before
+            and time.monotonic() <= deadline
+            and not _visual_state_failures(actual, before)
         )
     except Exception:
         return False
@@ -840,14 +914,29 @@ def _try_restore_theme_backup(
     before: ThemeVisualState,
     settle_seconds: float,
     visual_state_reader: Callable[[], ThemeVisualState] | None,
+    timeout_seconds: float,
 ) -> bool:
+    deadline = time.monotonic() + timeout_seconds
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        return False
     try:
-        backend.apply_theme_v2(rollback_path)
-        _settle(settle_seconds)
+        _, target_index = backend.apply_theme_v2(
+            rollback_path,
+            timeout_seconds=remaining,
+        )
+        _settle_before_deadline(settle_seconds, deadline)
         _, actual = _read_active_visual_state(backend, visual_state_reader)
-        return not _visual_state_failures(
-            actual,
-            before,
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+        current_index, custom_index = backend.current_v2_indices(
+            timeout_seconds=remaining
+        )
+        return (
+            current_index in {target_index, custom_index}
+            and time.monotonic() <= deadline
+            and not _visual_state_failures(actual, before)
         )
     except Exception:
         return False
@@ -861,6 +950,7 @@ def _rollback_theme_v2(
     rollback_path: Path | None,
     settle_seconds: float,
     visual_state_reader: Callable[[], ThemeVisualState] | None,
+    timeout_seconds: float,
 ) -> bool:
     if _try_restore_original_index(
         backend,
@@ -868,6 +958,7 @@ def _rollback_theme_v2(
         before=before,
         settle_seconds=settle_seconds,
         visual_state_reader=visual_state_reader,
+        timeout_seconds=timeout_seconds,
     ):
         return True
     return rollback_path is not None and _try_restore_theme_backup(
@@ -876,6 +967,7 @@ def _rollback_theme_v2(
         before=before,
         settle_seconds=settle_seconds,
         visual_state_reader=visual_state_reader,
+        timeout_seconds=timeout_seconds,
     )
 
 
@@ -887,11 +979,16 @@ def apply_and_verify_theme_v2(
     rollback_path: Path | None = None,
     backend: ThemeApplyV2Backend | None = None,
     settle_seconds: float = 2.0,
+    operation_timeout_seconds: float = 35.0,
+    rollback_timeout_seconds: float = 35.0,
     verification_timeout_seconds: float = 5.0,
     verification_poll_interval_seconds: float = 0.25,
     visual_state_reader: Callable[[], ThemeVisualState] | None = None,
 ) -> ThemeApplyV2Result:
     for name, value in (
+        ("settle_seconds", settle_seconds),
+        ("operation_timeout_seconds", operation_timeout_seconds),
+        ("rollback_timeout_seconds", rollback_timeout_seconds),
         ("verification_timeout_seconds", verification_timeout_seconds),
         ("verification_poll_interval_seconds", verification_poll_interval_seconds),
     ):
@@ -899,15 +996,27 @@ def apply_and_verify_theme_v2(
             raise ValueError(f"{name} must be a finite non-negative number.")
 
     backend = backend or WindowsThemeApplyBackend()
-    before_index = backend.current_v2_index()
+    if operation_timeout_seconds <= 0:
+        raise ThemeFileError("Theme apply deadline has expired; no bridge was started.")
+    operation_deadline = time.monotonic() + operation_timeout_seconds
+    remaining = operation_deadline - time.monotonic()
+    if remaining <= 0:
+        raise ThemeFileError("Theme apply deadline has expired; no bridge was started.")
+    before_index = backend.current_v2_index(timeout_seconds=remaining)
+    remaining = operation_deadline - time.monotonic()
+    if remaining <= 0:
+        raise ThemeFileError("Theme apply deadline expired before ApplyV2.")
     verification_diagnostics: dict[str, object] | None = None
     try:
-        bridge_before, target_index = backend.apply_theme_v2(managed_path)
+        bridge_before, target_index = backend.apply_theme_v2(
+            managed_path,
+            timeout_seconds=remaining,
+        )
         _verify_bridge_before(
             index_before=before_index,
             bridge_before=bridge_before,
         )
-        _settle(settle_seconds)
+        _settle_before_deadline(settle_seconds, operation_deadline)
         active_path, actual, current_index, verification_diagnostics = (
             _poll_theme_visual_state(
                 backend,
@@ -917,6 +1026,7 @@ def apply_and_verify_theme_v2(
                 index_before=before_index,
                 timeout_seconds=verification_timeout_seconds,
                 poll_interval_seconds=verification_poll_interval_seconds,
+                operation_deadline=operation_deadline,
             )
         )
         return ThemeApplyV2Result(
@@ -937,6 +1047,7 @@ def apply_and_verify_theme_v2(
             rollback_path=rollback_path,
             settle_seconds=settle_seconds,
             visual_state_reader=visual_state_reader,
+            timeout_seconds=rollback_timeout_seconds,
         )
         raise LiveThemeApplyError(
             f"Managed theme V2 apply failed: {exc}",

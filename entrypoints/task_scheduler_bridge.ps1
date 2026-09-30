@@ -18,7 +18,7 @@ $TaskRunLevelLua = 0
 $TaskTriggerTime = 1
 $TaskTriggerDaily = 2
 $TaskActionExec = 0
-$TaskInstancesIgnoreNew = 2
+$TaskInstancesQueue = 1
 $ManagedTaskPath = '\ThemeScheduler'
 
 function Write-BridgeResult {
@@ -260,9 +260,6 @@ function Assert-DesiredSpec {
     }
 
     $triggers = @($Spec.triggers)
-    if ($triggers.Count -notin @(4, 6)) {
-        throw 'The managed task requires four or six triggers.'
-    }
     $ids = @{}
     foreach ($trigger in $triggers) {
         if ($ids.ContainsKey([string]$trigger.id)) {
@@ -284,10 +281,16 @@ function Assert-DesiredSpec {
     }
     $hasDeferredPrepare = $ids.ContainsKey('DeferredPrepare')
     $hasDeferredBoundary = $ids.ContainsKey('DeferredBoundary')
+    $hasAutoRetry = $ids.ContainsKey('AutoRetry')
     if ($hasDeferredPrepare -ne $hasDeferredBoundary) {
         throw 'Deferred triggers must form a complete pair.'
     }
-    if (($triggers.Count -eq 6) -ne $hasDeferredPrepare) {
+    $validTopology =
+        ($triggers.Count -eq 4 -and -not $hasDeferredPrepare -and -not $hasAutoRetry) -or
+        ($triggers.Count -eq 5 -and -not $hasDeferredPrepare -and $hasAutoRetry) -or
+        ($triggers.Count -eq 6 -and $hasDeferredPrepare -and -not $hasAutoRetry) -or
+        ($triggers.Count -eq 7 -and $hasDeferredPrepare -and $hasAutoRetry)
+    if (-not $validTopology) {
         throw 'Managed trigger identities do not match trigger count.'
     }
 
@@ -354,12 +357,25 @@ function Assert-DesiredSpec {
             throw 'Deferred prepare must precede deferred execution by five minutes.'
         }
     }
+    if ($hasAutoRetry) {
+        $retry = $byId.AutoRetry
+        if ($retry.type -ne 'Time' -or -not [bool]$retry.enabled) {
+            throw 'AutoRetry must be one enabled one-time trigger.'
+        }
+        $retryAt = [DateTimeOffset]::Parse(
+            [string]$retry.startAt,
+            [System.Globalization.CultureInfo]::InvariantCulture
+        )
+        if ($retryAt.Second -ne 0 -or $retryAt.Millisecond -ne 0) {
+            throw 'AutoRetry must be aligned to a whole minute.'
+        }
+    }
 
     $settings = $Spec.settings
     if (
         -not [bool]$settings.startWhenAvailable -or
         [bool]$settings.wakeToRun -or
-        $settings.multipleInstances -ne 'IgnoreNew' -or
+        $settings.multipleInstances -ne 'Queue' -or
         -not [bool]$settings.allowStartOnBatteries -or
         [bool]$settings.stopIfGoingOnBatteries -or
         [bool]$settings.runOnlyIfNetworkAvailable -or
@@ -442,7 +458,7 @@ switch ($Action) {
         $definition.Settings.Enabled = [bool]$spec.enabled
         $definition.Settings.StartWhenAvailable = $true
         $definition.Settings.WakeToRun = $false
-        $definition.Settings.MultipleInstances = $TaskInstancesIgnoreNew
+        $definition.Settings.MultipleInstances = $TaskInstancesQueue
         $definition.Settings.DisallowStartIfOnBatteries = $false
         $definition.Settings.StopIfGoingOnBatteries = $false
         $definition.Settings.RunOnlyIfNetworkAvailable = $false

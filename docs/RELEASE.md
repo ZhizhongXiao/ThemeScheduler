@@ -12,8 +12,8 @@ x64、少量熟人分发的 `1.0.1` 维护版。该版本基于 `1.0.0`，包含
 见 [ROADMAP_1.0.md](ROADMAP_1.0.md)。
 
 首版自有 EXE 不采用 Authenticode。该决定不降低 Defender、SmartScreen
-或 Smart App Control 设置，也不改变随包运行 Microsoft WebView2 安装程序
-时必须验证微软签名的要求。
+或 Smart App Control 设置。程序不随包运行 WebView2 安装程序；Runtime 缺失时
+显示原生错误提示并停止启动，用户需另行安装后重试。
 
 ## 2. 冻结构建输入
 
@@ -152,9 +152,9 @@ Setup 与用户说明。`dist/RELEASE-README.md` 明确说明未签名状态、�
 开发机验收，发布记录必须明确标为“开发机当前用户生命周期验证”，不得写成
 干净设备已经通过。
 
-WebView2 已存在路径必须通过。缺失联网和缺失离线路径如果没有可安全恢复的
-专用测试设备，可以只验证原生检测和错误呈现，并把真实 Runtime 安装列为
-已知未验收项，不能在主开发机上为测试而破坏系统 Runtime。
+WebView2 已存在时 GUI 必须启动。Runtime 缺失或检测失败时，Setup、主 GUI 和卸载
+GUI 必须显示原生错误提示并停止启动；程序不得启动 Runtime 安装程序。可在隔离
+测试设备上验证缺失 Runtime 的路径，不能为测试而移除开发机上的系统 Runtime。
 
 ## 7. Defender 与 SmartScreen
 

@@ -87,14 +87,7 @@ sdist 当作用户安装包。
 
 ## 4. WebView2 Runtime
 
-PyInstaller 打入的 pywebview 桥接 DLL 不等于 WebView2 Runtime。安装器必须在展示 pywebview 安装页前使用原生 Windows 能力检测 Runtime：
-
-1. 已安装：继续启动 GUI 安装器；
-2. 缺失且联网：向用户说明后运行随安装器提供、已验证 Microsoft Authenticode 签名的 Evergreen Bootstrapper；
-3. 缺失且离线：提示使用随离线发布包提供的 Evergreen Standalone Installer；
-4. 安装失败：停止安装并给出明确错误，不静默降级到旧渲染器。
-
-默认使用当前用户可用的安装方式；只有 WebView2 安装程序自身确有必要时才请求提升权限。正式程序启动时也执行轻量检测，缺失时使用原生对话框提供修复入口。
+PyInstaller 打入的 pywebview 桥接 DLL 不等于 WebView2 Runtime。Setup、主 GUI 和卸载 GUI 在导入 pywebview 前检测 Runtime。检测失败或缺失时显示原生错误提示并停止启动；程序不下载或运行 WebView2 安装程序，也不降级到 MSHTML。用户需另行安装 Microsoft Edge WebView2 Runtime，再重新启动对应程序。
 
 ## 5. PyInstaller 规则
 
@@ -104,7 +97,7 @@ PyInstaller 打入的 pywebview 桥接 DLL 不等于 WebView2 Runtime。安装�
 - 独立卸载器打包 pywebview、本地卸载前端、共享生命周期向导、字体子集及必要主题/任务/快捷方式桥接；它仍是单文件自包含产物，不从主程序 `_internal` 加载任何资源；
 - 临时执行同时绑定一次性令牌、15 分钟有效期、默认安装根、卸载器 SHA-256 和清理脚本 SHA-256；
 - GUI 资源、图标和版本信息显式写入 spec；
-- 不使用 UPX、代码混淆、加壳、隐藏命令或动态下载并执行应用代码；唯一例外是经用户确认、签名验证的微软 WebView2 Evergreen 系统依赖安装流程；
+- 不使用 UPX、代码混淆、加壳、隐藏命令或动态下载并执行应用代码；
 - 不从开发机器的全局环境收集未声明依赖；
 - spec 不包含机器专属绝对路径；
 - 任务计划目标必须指向稳定安装路径中的主 EXE；
@@ -143,7 +136,7 @@ PyInstaller 打入的 pywebview 桥接 DLL 不等于 WebView2 Runtime。安装�
 [TS-142 干净设备验收](../docs/CLEAN_MACHINE_ACCEPTANCE.md)。
 
 - 在干净 Windows 11 x64、普通当前用户和无 Python 环境中完成全新安装；
-- WebView2 已存在、缺失联网、缺失离线三条路径结果清晰；
+- WebView2 已存在时 GUI 可启动；Runtime 缺失或检测失败时显示原生错误提示并停止启动，程序不运行 Runtime 安装程序；
 - GUI 可在常见 DPI、中文及空格路径下使用；
 - `ThemeScheduler.exe auto` 不初始化 GUI、不弹控制台窗口；
 - 四个固定任务触发器、可选延后触发对、错过补运行和跨重启行为通过；

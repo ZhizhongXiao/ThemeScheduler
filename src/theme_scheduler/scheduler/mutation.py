@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import os
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
+from datetime import datetime
+from pathlib import Path
 from typing import Any, Protocol
 
+from ..core import ExecutionLock
+from ..execution_lock import WindowsNamedMutexLock, named_mutex_name_for_path
 from ._validation import _boolean, _exact_keys, _text
 from .constants import (
+    AUTO_RETRY_TRIGGER_ID,
     DEFAULT_TASK_PATH,
     TASK_BACKUP_KIND,
     TASK_BACKUP_SCHEMA_VERSION,
@@ -16,6 +23,7 @@ from .errors import SchedulerContractError, SchedulerMutationError
 from .inspection import compare_task_specs
 from .models import TaskSpec
 from .specification import validate_desired_task
+from .triggers import TimeTrigger
 
 
 class TaskSchedulerBackend(Protocol):
@@ -32,6 +40,36 @@ class TaskSchedulerBackend(Protocol):
     def restore(self, backup: TaskDefinitionBackup) -> None: ...
 
     def delete(self, task_path: str) -> None: ...
+
+
+def _default_scheduler_mutation_lock() -> ExecutionLock:
+    local_app_data = Path(
+        os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
+    )
+    lock_path = local_app_data / "ThemeScheduler" / "scheduler-mutation"
+    return WindowsNamedMutexLock(
+        named_mutex_name_for_path(lock_path, purpose="SchedulerMutation"),
+        wait_timeout_ms=30_000,
+    )
+
+
+@contextmanager
+def scheduler_mutation(
+    lock: ExecutionLock | None = None,
+) -> Iterator[None]:
+    """Serialize Task Scheduler read-modify-write sequences."""
+
+    mutation_lock = lock or _default_scheduler_mutation_lock()
+    if not mutation_lock.acquire():
+        raise SchedulerMutationError(
+            "Task Scheduler mutation mutex timed out.",
+            rollback_attempted=False,
+            rollback_succeeded=False,
+        )
+    try:
+        yield
+    finally:
+        mutation_lock.release()
 
 
 @dataclass(frozen=True)
@@ -135,13 +173,76 @@ def _restore_previous(
         return False
 
 
-def reconcile_task(
-    backend: TaskSchedulerBackend, desired: TaskSpec
+def _with_auto_retry(
+    desired: TaskSpec,
+    before: TaskSpec | None,
+    *,
+    now: datetime,
+    auto_retry_at: datetime | None,
+    clear_auto_retry: bool,
+) -> TaskSpec:
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("AutoRetry comparison requires an aware datetime.")
+    explicit = next(
+        (
+            trigger
+            for trigger in desired.triggers
+            if trigger.trigger_id == AUTO_RETRY_TRIGGER_ID
+        ),
+        None,
+    )
+    retained = None
+    if auto_retry_at is not None:
+        retained = TimeTrigger(
+            AUTO_RETRY_TRIGGER_ID,
+            auto_retry_at.isoformat(timespec="seconds"),
+        )
+    elif not clear_auto_retry:
+        candidate = explicit
+        if candidate is None and before is not None:
+            candidate = next(
+                (
+                    trigger
+                    for trigger in before.triggers
+                    if trigger.trigger_id == AUTO_RETRY_TRIGGER_ID
+                ),
+                None,
+            )
+        if (
+            isinstance(candidate, TimeTrigger)
+            and datetime.fromisoformat(candidate.start_at) > now
+        ):
+            retained = candidate
+    triggers = tuple(
+        trigger
+        for trigger in desired.triggers
+        if trigger.trigger_id != AUTO_RETRY_TRIGGER_ID
+    )
+    if retained is not None:
+        triggers = (*triggers, retained)
+    return replace(desired, triggers=triggers)
+
+
+def _reconcile_task_locked(
+    backend: TaskSchedulerBackend,
+    desired: TaskSpec,
+    *,
+    now: datetime | None = None,
+    auto_retry_at: datetime | None = None,
+    clear_auto_retry: bool = False,
 ) -> TaskMutationOutcome:
-    """Atomically replace one definition and verify, restoring on failure."""
+    """Reconcile while the caller owns the scheduler-mutation mutex."""
 
     validate_desired_task(desired)
     before = backend.read(desired.task_path)
+    desired = _with_auto_retry(
+        desired,
+        before,
+        now=now or datetime.now().astimezone(),
+        auto_retry_at=auto_retry_at,
+        clear_auto_retry=clear_auto_retry,
+    )
+    validate_desired_task(desired)
     if before is not None and not compare_task_specs(desired, before):
         return TaskMutationOutcome("unchanged", False, True, before, before)
     backup = backend.capture(desired.task_path)
@@ -174,40 +275,68 @@ def reconcile_task(
     )
 
 
+def reconcile_task(
+    backend: TaskSchedulerBackend,
+    desired: TaskSpec,
+    *,
+    now: datetime | None = None,
+    auto_retry_at: datetime | None = None,
+    clear_auto_retry: bool = False,
+    mutation_lock: ExecutionLock | None = None,
+) -> TaskMutationOutcome:
+    """Atomically replace one definition and verify, restoring on failure."""
+
+    with scheduler_mutation(mutation_lock):
+        return _reconcile_task_locked(
+            backend,
+            desired,
+            now=now,
+            auto_retry_at=auto_retry_at,
+            clear_auto_retry=clear_auto_retry,
+        )
+
+
 def set_task_enabled(
     backend: TaskSchedulerBackend,
     task_path: str,
     enabled: bool,
+    *,
+    mutation_lock: ExecutionLock | None = None,
 ) -> TaskMutationOutcome:
-    before = backend.read(task_path)
-    if before is None:
-        raise SchedulerMutationError(
-            "Cannot change enabled state because the task is absent.",
-            rollback_attempted=False,
-            rollback_succeeded=False,
-        )
-    return reconcile_task(backend, replace(before, enabled=enabled))
+    with scheduler_mutation(mutation_lock):
+        before = backend.read(task_path)
+        if before is None:
+            raise SchedulerMutationError(
+                "Cannot change enabled state because the task is absent.",
+                rollback_attempted=False,
+                rollback_succeeded=False,
+            )
+        return _reconcile_task_locked(backend, replace(before, enabled=enabled))
 
 
 def delete_task(
-    backend: TaskSchedulerBackend, task_path: str = DEFAULT_TASK_PATH
+    backend: TaskSchedulerBackend,
+    task_path: str = DEFAULT_TASK_PATH,
+    *,
+    mutation_lock: ExecutionLock | None = None,
 ) -> TaskMutationOutcome:
-    before = backend.read(task_path)
-    if before is None:
-        return TaskMutationOutcome("absent", False, True, None, None)
-    try:
-        backend.delete(task_path)
-        after = backend.read(task_path)
-    except Exception as exc:
-        raise SchedulerMutationError(
-            f"Task deletion failed: {exc}",
-            rollback_attempted=False,
-            rollback_succeeded=False,
-        ) from exc
-    if after is not None:
-        raise SchedulerMutationError(
-            "Task deletion readback still found the task.",
-            rollback_attempted=False,
-            rollback_succeeded=False,
-        )
-    return TaskMutationOutcome("deleted", True, True, before, None)
+    with scheduler_mutation(mutation_lock):
+        before = backend.read(task_path)
+        if before is None:
+            return TaskMutationOutcome("absent", False, True, None, None)
+        try:
+            backend.delete(task_path)
+            after = backend.read(task_path)
+        except Exception as exc:
+            raise SchedulerMutationError(
+                f"Task deletion failed: {exc}",
+                rollback_attempted=False,
+                rollback_succeeded=False,
+            ) from exc
+        if after is not None:
+            raise SchedulerMutationError(
+                "Task deletion readback still found the task.",
+                rollback_attempted=False,
+                rollback_succeeded=False,
+            )
+        return TaskMutationOutcome("deleted", True, True, before, None)

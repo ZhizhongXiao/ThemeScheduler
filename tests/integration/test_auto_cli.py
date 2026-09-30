@@ -7,12 +7,16 @@ from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime
 from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 from theme_scheduler.accent_profile import (
     AccentProfile,
     AccentProfileStore,
 )
-from theme_scheduler.cli.auto import _FixedClock
+from theme_scheduler.cli.auto import (
+    _FixedClock,
+    create_live_auto_runner,
+)
 from theme_scheduler.cli.auto import main as auto_cli_main
 from theme_scheduler.config import AppConfig, ConfigStore
 from theme_scheduler.state import AppState, StateStore
@@ -23,6 +27,23 @@ class AutoCliTests(unittest.TestCase):
     def test_fixed_clock_returns_the_injected_instant(self) -> None:
         instant = datetime.fromisoformat("2026-09-13T12:00:00+08:00")
         self.assertIs(_FixedClock(instant).now(), instant)
+
+    def test_only_scheduled_auto_waits_for_execution_mutex(self) -> None:
+        layout = UserDataLayout(Path("data"))
+        with (
+            patch("theme_scheduler.cli.auto.collect_environment", return_value={}),
+            patch(
+                "theme_scheduler.cli.auto._validate_live_environment",
+                return_value="26100",
+            ),
+            patch("theme_scheduler.cli.auto.WindowsNamedMutexLock") as mutex,
+            patch("theme_scheduler.cli.auto.WindowsAutoBackend"),
+        ):
+            create_live_auto_runner(layout, scheduled=True)
+            self.assertEqual(mutex.call_args.kwargs["wait_timeout_ms"], 30_000)
+
+            create_live_auto_runner(layout, scheduled=False)
+            self.assertIsNone(mutex.call_args.kwargs["wait_timeout_ms"])
 
     def _layout(self, root: Path, *, active: str = "night") -> UserDataLayout:
         layout = UserDataLayout(root / "data")

@@ -177,10 +177,30 @@ class ManagedThemeApplyTests(unittest.TestCase):
                 managed.before,
                 backend=backend,
                 settle_seconds=0,
-                verification_timeout_seconds=0,
+                verification_timeout_seconds=0.05,
             )
         self.assertEqual(result.actual.app_mode, "Light")
         self.assertEqual(result.index_after, 13)
+        self.assertTrue(backend.bridge_budgets)
+        self.assertTrue(
+            all(budget is not None and budget > 0 for budget in backend.bridge_budgets)
+        )
+
+    def test_expired_apply_budget_does_not_start_apply_bridge(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            _backup, target, managed, backend = self._fixture(Path(directory))
+            with self.assertRaises(ThemeFileError):
+                apply_and_verify_theme_v2(
+                    target,
+                    managed.after,
+                    managed.before,
+                    backend=backend,
+                    settle_seconds=0,
+                    operation_timeout_seconds=0,
+                )
+
+        self.assertEqual(backend.apply_count, 0)
+        self.assertNotIn("apply_theme_v2", [name for name, _ in backend.calls])
 
     def test_verification_polls_until_visual_state_converges(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -230,7 +250,7 @@ class ManagedThemeApplyTests(unittest.TestCase):
                     managed.before,
                     backend=backend,
                     settle_seconds=0,
-                    verification_timeout_seconds=0.01,
+                    verification_timeout_seconds=0.5,
                     verification_poll_interval_seconds=0.001,
                     visual_state_reader=lambda: managed.before,
                 )
@@ -251,7 +271,9 @@ class ManagedThemeApplyTests(unittest.TestCase):
         assert isinstance(last_sample, dict)
         self.assertEqual(last_sample["actual"], managed.before.as_dict())
         self.assertEqual(last_sample["activeThemePath"], str(target))
-        self.assertEqual(last_sample["currentIndex"], 13)
+        index_samples = [sample for sample in samples if "currentIndex" in sample]
+        self.assertTrue(index_samples)
+        self.assertEqual(index_samples[-1]["currentIndex"], 13)
         self.assertIn("observedAt", last_sample)
         self.assertEqual(backend.current_theme_path(), backup)
 
@@ -266,7 +288,9 @@ class ManagedThemeApplyTests(unittest.TestCase):
                     managed.before,
                     backend=backend,
                     settle_seconds=0,
-                    verification_timeout_seconds=0,
+                    verification_timeout_seconds=0.05,
+                    operation_timeout_seconds=2,
+                    rollback_timeout_seconds=3,
                 )
         self.assertTrue(caught.exception.rollback_succeeded)
         self.assertIn(("set_v2_index", 6), backend.calls)
@@ -287,13 +311,24 @@ class ManagedThemeApplyTests(unittest.TestCase):
                     rollback_path=backup,
                     backend=backend,
                     settle_seconds=0,
-                    verification_timeout_seconds=0,
+                    verification_timeout_seconds=0.05,
+                    operation_timeout_seconds=2,
+                    rollback_timeout_seconds=3,
                 )
         self.assertTrue(caught.exception.rollback_succeeded)
         self.assertEqual(
             [call[0] for call in backend.calls].count("apply_theme_v2"),
             2,
         )
+        self.assertEqual(len(backend.apply_budgets), 2)
+        first_budget = backend.apply_budgets[0]
+        second_budget = backend.apply_budgets[1]
+        assert first_budget is not None
+        assert second_budget is not None
+        self.assertGreater(first_budget, 0)
+        self.assertLessEqual(first_budget, 2)
+        self.assertGreater(second_budget, 0)
+        self.assertLessEqual(second_budget, 3)
 
 
 if __name__ == "__main__":

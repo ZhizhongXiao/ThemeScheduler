@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from tests._support import capture_payload
 from theme_scheduler.backup import InstallBackup
@@ -14,6 +15,7 @@ from theme_scheduler.lifecycle import (
     PayloadManifest,
 )
 from theme_scheduler.lifecycle.deployment import (
+    DeploymentOutcome,
     FileDeploymentService,
     verify_active_payload,
 )
@@ -257,6 +259,53 @@ class SetupServiceTests(unittest.TestCase):
                 existing_log.read_text(encoding="utf-8"),
                 "keep\n",
             )
+
+    def test_deployment_partial_is_not_cleared_by_successful_data_rollback(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (
+                layout,
+                manifest,
+                service,
+                shortcuts,
+                registration,
+                _restored,
+            ) = self._values(root)
+            deployment_outcome = DeploymentOutcome(
+                transaction_id=TRANSACTION_ID,
+                status="partial",
+                operation="install",
+                from_version=None,
+                to_version=manifest.version,
+                program_root=layout.program_root,
+                staging=layout.staging(TRANSACTION_ID),
+                rollback=layout.rollback(TRANSACTION_ID),
+                active_verified=False,
+                rollback_attempted=True,
+                rollback_succeeded=False,
+                message="deployment rollback failed",
+            )
+
+            with patch.object(
+                service.deployment,
+                "deploy",
+                return_value=deployment_outcome,
+            ):
+                outcome = service.install(
+                    SetupOptions.defaults(),
+                    registration=registration,
+                    shortcut_plan=shortcuts,
+                    user_id=r"TEST\User",
+                    windows_build="26200",
+                    transaction_id=TRANSACTION_ID,
+                )
+
+            self.assertEqual(outcome.result, "partial")
+            self.assertTrue(outcome.rollback_attempted)
+            self.assertFalse(outcome.rollback_succeeded)
+            self.assertEqual(outcome.transaction_id, TRANSACTION_ID)
 
     def test_setup_never_immediately_synchronizes_windows(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
